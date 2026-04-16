@@ -33,3 +33,8 @@ analyzeResult (MkTicket t) code =
   if code == 0
      then Right ("Success", MkTicket t)
      else Left (MkTicket t)
+
+export
+retryTicket : (1 t : Ticket Failed (S n)) -> Ticket Ready n
+retryTicket (MkTicket t) = MkTicket t
+
