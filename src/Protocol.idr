@@ -13,6 +13,7 @@ record ProcessTask where
   path    : String       -- Полный путь к бинарнику
   args    : List String  -- Список аргументов
   timeout : Int          -- Тайм-аут в секундах
+  logFile : Maybe String
 
 -- Генерируем реализацию интерфейса FromJSON
 %runElab derive "ProcessTask" [FromJSON]

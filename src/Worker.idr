@@ -15,6 +15,16 @@ data Task : Type where
      Job : {n : Nat} -> (1 _ : Ticket Ready n) -> Task
      Die : Task
 
+-- Вспомогательная функция записи лога
+writeLog : Maybe String -> String -> String -> IO ()
+writeLog Nothing _ _ = pure () -- Если путь не указан, ничего не делаем
+writeLog (Just path) name content = do
+  let header = "=== Log for \{name} ===\n"
+  res <- writeFile path (header ++ content)
+  case res of
+    Left err => putStrLn "Worker Error: Could not write log to \{path}: \{show err}"
+    Right _  => pure ()
+
 -- Рекурсивное чтение всех строк
 readAll : File -> IO String
 readAll f = do
@@ -28,7 +38,7 @@ readAll f = do
 
 -- Запуск с захватом вывода
 runCmdCapture : ProcessTask -> IO (Int, String)
-runCmdCapture (MKProcessTask _ path args timeout) = do
+runCmdCapture (MKProcessTask _ path args timeout _) = do
   let cmd = "timeout " ++ show timeout ++ "s " ++ path ++ " " ++ unwords args ++ " 2>&1"
 
   -- Распаковываем Either, возвращаемый popen
@@ -48,8 +58,10 @@ handleJob id (S k) t outChan = do
   putStrLn "Worker \{show id}: Executing \{task.name}..."
 
   (exitCode, output) <- runCmdCapture task
+  -- Пишем лог сразу после получения вывода
+  writeLog task.logFile task.name output
 
-  let 1 t_back = MkTicket task {st=InProgress}
+  let t_back = MkTicket task {st=InProgress}
   case analyzeResult t_back exitCode of
     Right (msg, _) =>
       channelPut outChan (Success task.name output)
