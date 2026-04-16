@@ -119,7 +119,5 @@ main = do
     )) jobs
 
   -- Закрытие
-  channelPut tasks Die
-  channelPut tasks Die
-  channelPut tasks Die
+  ignore $ fork $ traverse_ (\_ => channelPut tasks Die) jobs
   putStrLn "All tasks processed safely."
