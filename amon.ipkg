@@ -1,0 +1,10 @@
+package amon
+
+main = Main
+executable = amon
+sourcedir = "src"
+depends = base
+	, contrib
+	, elab-util
+	, json
+	, tui

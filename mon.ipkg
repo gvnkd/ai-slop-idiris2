@@ -1,0 +1,7 @@
+package ansible_mon
+
+depends = contrib
+
+main = Main
+executable = mon
+sourcedir = "build_src" -- Это значение будет заменено скриптом на "build_src"

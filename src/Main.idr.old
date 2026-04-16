@@ -1,0 +1,113 @@
+module Main
+
+-- Убираем 'import TUI'
+import TUI           -- Вот здесь основная функция runApp
+import TUI.Layout
+--import TUI.Widget
+--import TUI.Widgets.List
+--import TUI.Widgets.Text
+import TUI.Event        -- Может понадобиться для обработки клавиш
+import System
+import System.File
+import Data.List
+import Data.String
+import Data.Maybe
+import Data.IORef
+
+--------------------------------------------------------------------------------
+-- Состояние
+--------------------------------------------------------------------------------
+
+record ProcessInfo where
+    constructor MkProc
+    name    : String
+    logFile : String
+    doneFile: String
+
+record Model where
+    constructor MkModel
+    procs         : List ProcessInfo
+    selectedIndex : Nat
+    currentLogs   : String
+
+--------------------------------------------------------------------------------
+-- Логика процессов (наш "фоновый" запуск)
+--------------------------------------------------------------------------------
+
+spawnTask : String -> String -> IO ProcessInfo
+spawnTask n cmd = do
+    let log = "/tmp/mon_" ++ n ++ ".log"
+    let done = "/tmp/mon_" ++ n ++ ".done"
+    _ <- system ("rm -f " ++ log ++ " " ++ done)
+    -- Запускаем в фоне: (cmd) > log; touch done
+    _ <- system ("(" ++ cmd ++ ") > " ++ log ++ " 2>&1; touch " ++ done ++ " &")
+    pure (MkProc n log done)
+
+readTail : String -> IO String
+readTail file = do
+    Right content <- readFile file | Left _ => pure "Waiting for output..."
+    let allLines = filter (not . null) (lines content)
+    pure $ unlines $ reverse $ take 30 $ reverse allLines
+
+--------------------------------------------------------------------------------
+-- TEA: Update & View
+--------------------------------------------------------------------------------
+
+data Msg = Tick | Up | Down | Select Nat | Quit
+
+update : Model -> Msg -> IO Model
+update m Quit = exitSuccess $> m
+update m Up   = pure { selectedIndex $= (\i => minus i 1) } m
+update m Down = 
+    let next = m.selectedIndex + 1
+    in pure { selectedIndex := if next < length m.procs then next else m.selectedIndex } m
+update m (Select i) = pure { selectedIndex := i } m
+update m Tick = do
+    -- Читаем логи только для текущего выбранного процесса
+    case preview (at m.selectedIndex) m.procs of
+        Nothing => pure m
+        Just p  => do
+            logs <- readTail p.logFile
+            pure { currentLogs := logs } m
+
+view : Model -> Widget Msg
+view m = 
+    hBox [
+        -- Левая колонка (Список)
+        vBox [
+            text " [ ПРОЦЕССЫ ] ",
+            list (map name m.procs) m.selectedIndex
+        ] |> border All |> flex 1,
+        
+        -- Правая колонка (Логи)
+        vBox [
+            text (" [ ВЫВОД: " ++ (maybe "???" name $ preview (at m.selectedIndex) m.procs) ++ " ] "),
+            text m.currentLogs
+        ] |> border All |> flex 3
+    ]
+
+--------------------------------------------------------------------------------
+-- Main
+--------------------------------------------------------------------------------
+
+main : IO ()
+main = do
+    -- Запускаем демонстрационные процессы
+    p1 <- spawnTask "DB_Migrate" "for i in {1..20}; do echo \"Migrating table $i...\"; sleep 1; done"
+    p2 <- spawnTask "Web_Build" "echo \"npm install\"; sleep 2; for i in {1..10}; do echo \"Build chunk $i\"; sleep 0.5; done; echo \"Done!\""
+    p3 <- spawnTask "System_Check" "while true; do df -h /; sleep 5; done"
+
+    let initialModel = MkModel [p1, p2, p3] 0 "Initializing..."
+
+    runApp {
+        init = initialModel,
+        update = update,
+        view = view,
+        subscriptions = [
+            every 500 Millis Tick,      -- Обновляем логи каждые 0.5 сек
+            onKey (KeyChar 'q') Quit,
+            onKey KeyUp Up,
+            onKey KeyDown Down
+        ]
+    }
+

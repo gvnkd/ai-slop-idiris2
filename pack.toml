@@ -1,0 +1,5 @@
+[install]
+depends = [ "contrib", "tui", "ansi" ]
+
+[custom]
+tui = { git = "https://github.com/emdash/idris2-tui", branch = "main" }
