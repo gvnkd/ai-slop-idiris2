@@ -31,12 +31,13 @@ handleJob id (S k) t outChan = do
   exitCode <- runCmd task
   
   -- Возвращаем тикет в систему типов для соблюдения протокола
+    -- Возвращаем тикет в систему типов для соблюдения протокола
   let 1 t_back = MkTicket task {st=InProgress}
   case analyzeResult t_back exitCode of
-    Left (msg, _) => 
+    Right (msg, _) =>
       channelPut outChan (Success task.name msg)
-    Right t_failed => 
-      if exitCode == 124 -- Специальный код timeout
+    Left t_failed =>
+      if exitCode == 124
          then do
            putStrLn "Worker \{show id}: \{task.name} timed out!"
            handleJob id k (retryTicket t_failed) outChan

@@ -26,9 +26,10 @@ startTask : {n : Nat} -> (1 t : Ticket Ready n) -> Ticket InProgress n
 startTask (MkTicket t) = MkTicket t
 
 -- Сама логика "решать, что делать с кодом возврата"
+-- Теперь Right — это успех (String, Ticket Done), а Left — ошибка (Ticket Failed)
 export
-analyzeResult : {n : Nat} -> (1 t : Ticket InProgress n) -> Int -> (Either (String, Ticket Done n) (Ticket Failed n))
+analyzeResult : {n : Nat} -> (1 t : Ticket InProgress n) -> Int -> Either (Ticket Failed n) (String, Ticket Done n)
 analyzeResult (MkTicket t) code =
   if code == 0
-     then Left ("Success", MkTicket t)
-     else Right (MkTicket t)
+     then Right ("Success", MkTicket t)
+     else Left (MkTicket t)
