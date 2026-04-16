@@ -31,9 +31,13 @@ main = do
   traverse_ (\_ => (the (IO ()) $ do
       resMsg <- channelGet results
       case resMsg of
-           Success name out => putStrLn "[OK] \{name}: \{out}"
+           Success name out => do
+             putStrLn "[OK] \{name}"
+             putStrLn "--- Output ---"
+             putStrLn out
+             putStrLn "--------------"
            Failure name err => putStrLn "[FAIL] \{name}: \{err}"
-    )) [1..4]
+      )) [1..4]
   
   traverse_ (\_ => channelPut tasks Die) [1..2]
   putStrLn "All processes handled."

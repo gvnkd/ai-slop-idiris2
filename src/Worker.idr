@@ -1,9 +1,10 @@
 module Worker
 
-import Data.String
 import System
+import System.File -- Для fEOF, fGetLine
 import System.File.Process
 import System.Concurrency
+import Data.String
 import public Protocol
 
 public export
@@ -14,28 +15,44 @@ data Task : Type where
      Job : {n : Nat} -> (1 _ : Ticket Ready n) -> Task
      Die : Task
 
--- Формирует строку команды с использованием системного timeout
-runCmd : ProcessTask -> IO Int
-runCmd (MKProcessTask _ path args timeout) = do
-  -- Собираем команду: timeout Xs path arg1 arg2...
-  let fullCmd = "timeout " ++ show timeout ++ "s " ++ path ++ " " ++ unwords args
-  system fullCmd
+-- Рекурсивное чтение всех строк
+readAll : File -> IO String
+readAll f = do
+  eof <- fEOF f
+  if eof
+     then pure ""
+     else do
+       Right line <- fGetLine f | Left err => pure "Error reading line"
+       rest <- readAll f
+       pure (line ++ rest)
+
+-- Запуск с захватом вывода
+runCmdCapture : ProcessTask -> IO (Int, String)
+runCmdCapture (MKProcessTask _ path args timeout) = do
+  let cmd = "timeout " ++ show timeout ++ "s " ++ path ++ " " ++ unwords args ++ " 2>&1"
+
+  -- Распаковываем Either, возвращаемый popen
+  res <- popen cmd Read
+  case res of
+    Left err => pure (1, "Failed to popen: \{show err}")
+    Right f => do
+      output <- readAll f
+      exitCode <- pclose f
+      pure (exitCode, output)
 
 handleJob : Int -> (n : Nat) -> (1 t : Ticket Ready n) -> Channel Result -> IO ()
-handleJob id Z (MkTicket t) outChan = 
+handleJob id Z (MkTicket t) outChan =
   channelPut outChan (Failure t.name "Max retries reached")
 handleJob id (S k) t outChan = do
-  let (MkTicket task) = t -- Временная распаковка для доступа к данным
+  let (MkTicket task) = t
   putStrLn "Worker \{show id}: Executing \{task.name}..."
-  
-  exitCode <- runCmd task
-  
-  -- Возвращаем тикет в систему типов для соблюдения протокола
-    -- Возвращаем тикет в систему типов для соблюдения протокола
+
+  (exitCode, output) <- runCmdCapture task
+
   let 1 t_back = MkTicket task {st=InProgress}
   case analyzeResult t_back exitCode of
     Right (msg, _) =>
-      channelPut outChan (Success task.name msg)
+      channelPut outChan (Success task.name output)
     Left t_failed =>
       if exitCode == 124
          then do
@@ -44,9 +61,6 @@ handleJob id (S k) t outChan = do
          else do
            putStrLn "Worker \{show id}: \{task.name} failed with code \{show exitCode}"
            handleJob id k (retryTicket t_failed) outChan
-  where
-    retryTicket : (1 t : Ticket Failed (S n)) -> Ticket Ready n
-    retryTicket (MkTicket t) = MkTicket t
 
 export
 worker : (id : Int) -> Channel Task -> Channel Result -> IO ()
