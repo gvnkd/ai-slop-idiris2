@@ -3,24 +3,28 @@
     "name": "List Root Directory",
     "path": "eza",
     "args": ["-la", "./"],
-    "timeout": 2
+    "timeout": 2,
+    "logFile": "logs/root_dir.log"
   },
   {
     "name": "Quick Sleep",
     "path": "sleep",
     "args": ["0.5"],
-    "timeout": 1
+    "timeout": 1,
+    "logFile": "logs/timeout_error.log"
   },
   {
     "name": "Timed Out Task",
     "path": "sleep",
     "args": ["5"],
-    "timeout": 1
+    "timeout": 1,
+    "logFile": null
   },
   {
     "name": "Missing Binary Test",
     "path": "/usr/bin/not-exist",
     "args": [],
-    "timeout": 5
+    "timeout": 5,
+    "logFile": null
   }
 ]

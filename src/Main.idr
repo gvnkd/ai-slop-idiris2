@@ -1,5 +1,6 @@
 module Main
 
+import System
 import System.File
 import Language.JSON
 import JSON
@@ -28,6 +29,7 @@ loadTasks filename = do
 
 main : IO ()
 main = do
+  ignore $ system "mkdir -p logs"
   putStrLn "=== Linux Process Worker Pool (Auto-JSON) ==="
 
   -- 1. Пытаемся загрузить конфиг
