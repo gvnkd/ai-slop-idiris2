@@ -1,10 +1,29 @@
 package amon
 
-main = Main
+authors    = "Omg Bebebe"
+version    = 0.1.0
+readme     = "README.md"
+license    = "MIT"
+
+-- Главный модуль приложения
+main       = Main
+
+-- Имя исполняемого файла
 executable = amon
-sourcedir = "src"
-depends = base
-	, contrib
-	, elab-util
-	, json
-	, tui
+
+-- Папка с исходным кодом
+sourcedir  = "src"
+
+-- Зависимости
+-- 'linear' и 'contrib' критичны для нашего кода
+depends    = base >= 0.5.1
+           , contrib
+           , linear
+
+-- Список всех модулей проекта для корректной сборки
+modules    = Protocol
+           , Worker
+           , Main
+
+-- Опции компилятора (например, для проверки тотальности по умолчанию)
+-- opts       = "--total"
