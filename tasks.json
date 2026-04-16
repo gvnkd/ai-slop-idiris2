@@ -1,0 +1,26 @@
+[
+  {
+    "name": "List Root Directory",
+    "path": "eza",
+    "args": ["-la", "./"],
+    "timeout": 2
+  },
+  {
+    "name": "Quick Sleep",
+    "path": "sleep",
+    "args": ["0.5"],
+    "timeout": 1
+  },
+  {
+    "name": "Timed Out Task",
+    "path": "sleep",
+    "args": ["5"],
+    "timeout": 1
+  },
+  {
+    "name": "Missing Binary Test",
+    "path": "/usr/bin/not-exist",
+    "args": [],
+    "timeout": 5
+  }
+]

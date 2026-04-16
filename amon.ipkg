@@ -19,6 +19,8 @@ sourcedir  = "src"
 depends    = base >= 0.5.1
            , contrib
            , linear
+           , json
+           , elab-util
 
 -- Список всех модулей проекта для корректной сборки
 modules    = Protocol

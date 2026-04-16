@@ -1,5 +1,11 @@
 module Protocol
 
+import Language.JSON
+import Language.Reflection
+import JSON.Derive
+
+%language ElabReflection
+
 public export
 record ProcessTask where
   constructor MKProcessTask
@@ -7,6 +13,9 @@ record ProcessTask where
   path    : String       -- Полный путь к бинарнику
   args    : List String  -- Список аргументов
   timeout : Int          -- Тайм-аут в секундах
+
+-- Генерируем реализацию интерфейса FromJSON
+%runElab derive "ProcessTask" [FromJSON]
 
 public export
 data TaskState = Ready | InProgress | Done | Failed
