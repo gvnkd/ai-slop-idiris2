@@ -1,66 +1,36 @@
 module Main
 
-
-import TUI
-import TUI.Component.Box
-import TUI.MainLoop
-import TUI.MainLoop.Default
+import System.Concurrency
 import Data.List
+import Worker
 
-
-%default total
-
-
-items : String -> VList String
-items prefx = fromList "Items" $ item <$> [0..20]
-  where
-    item : Nat -> String
-    item i = "\{prefx}: \{show i}"
-
-record ViewPort a where
-  constructor MkViewPort
-  size     : Area
-  contents : a
-  offset   : (Integer, Integer)
-
-viewport : Area -> a -> (Integer, Integer) -> ViewPort a
-viewport = MkViewPort
-
-View a => View (ViewPort a) where
-  size self = self.size
-  paint state window self = do
-    clip window $ do
-      -- now paint the 
-      paint state (offset window self.offset) self.contents
-    -- debug render offset in bottom left screen corner.
-    showTextAt (MkPos 0 81) $ show window
-  where
-    offset : Rect -> (Integer, Integer) -> Rect
-    offset self (x, y) = (self.shiftX x).shiftY y
-
-[mine] View (Integer, Integer) where
-  size = const $ MkArea 0 0
-  paint state window self = do
-    let state = demoteFocused state
-    window <- packTop    state window $ box (MkArea 0 4) ' '
-    window <- packTop    state window $ HRule
-    window <- packBottom state window $ box (MkArea 0 2) ' '
-    window <- packBottom state window $ HRule
-    window <- packLeft   state window $ box (MkArea 5 4) ' '
-    window <- packLeft   state window $ VRule
-    window <- packLeft   state window $ viewport (MkArea 5 0) (Main.items "Left") $ (0, fst self)
-    window <- packLeft   state window $ VRule
-    paint state window $ viewport (MkArea 5 0) (Main.items "Right") $ (0, snd self)
-    showTextAt origin $ show self
+-- Утилита для запуска пула
+spawnPool : Int -> Channel Task -> Channel Result -> IO ()
+spawnPool count tasks results = 
+  ignore $ fork $ traverse_ (\i => fork (worker i tasks results)) [1..count]
 
 main : IO ()
 main = do
-  _ <- runView @{mine} !getDefault onKey (0, 0)
-  pure ()
-where
-  onKey : Event.Handler (Integer, Integer) () Key
-  onKey Up   (x, y) = update $ (x, y - 1)
-  onKey Down (x, y) = update $ (x, y + 1)
-  onKey Left (x, y) = update $ (x - 1, y)
-  onKey Right(x, y) = update $ (x + 1, y)
-  onKey _ _ = exit
+  putStrLn "Starting Refactored Worker Pool"
+  
+  tasks <- the (IO (Channel Task)) makeChannel
+  results <- the (IO (Channel Result)) makeChannel
+  
+  -- 1. Инициализация инфраструктуры
+  spawnPool 3 tasks results
+  
+  -- 2. Отправка задач (бизнес-логика)
+  let jobs = [1..10]
+  ignore $ fork $ traverse_ (\j => channelPut tasks (Job (MkTicket j {n=3}))) jobs
+
+  -- 3. Сбор результатов
+  traverse_ (\_ => (the (IO ()) $ do
+      resMsg <- channelGet results
+      case resMsg of
+           Res val => putStrLn "Success: \{show val}"
+           Failure val => putStrLn "Final Failure: \{show val}"
+    )) jobs
+  
+  -- 4. Завершение работы
+  traverse_ (\_ => channelPut tasks Die) [1..3]
+  putStrLn "Done."
