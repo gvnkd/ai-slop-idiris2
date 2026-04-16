@@ -1,53 +1,96 @@
 module Main
 
+import Control.Linear.LIO
 import System.Concurrency
 import Data.List
 
 -- 1. Состояния задачи
-data TaskState = Ready | InProgress | Done
+data TaskState = Ready | InProgress | Done | Failed
 
 -- 2. Ресурс Ticket (GADT)
-data Ticket : TaskState -> Type where
-     MkTicket : (val : Int) -> Ticket st
+data Ticket : TaskState -> Nat -> Type where
+     MkTicket : (val : Int) -> Ticket st n
 
 -- 3. Сообщения для воркера (GADT)
--- Теперь Idris четко видит линейность в конструкторе Job
 data Task : Type where
-     Job : (1 _ : Ticket Ready) -> Task
+     -- Теперь задача несет в себе тикет с n попытками
+     Job : {n : Nat} -> (1 _ : Ticket Ready n) -> Task
      Die : Task
 
-data Result = Res Int
+data Result = Res Int | Failure Int
 
--- 4. Протокол переходов
-startTask : (1 t : Ticket Ready) -> Ticket InProgress
+-- Результат выполнения протокола
+data StepResult : Nat -> Type where
+     OK : Int -> IO () -> StepResult n
+     -- Recoverable возможен только если n > 0 (т.е. S k)
+     Recoverable : Ticket Ready k -> StepResult (S k)
+     Abandoned : Int -> IO () -> StepResult n
+
+startTask : {n : Nat} -> (1 t : Ticket Ready n) -> Ticket InProgress n
 startTask (MkTicket v) = MkTicket v
 
-completeTask : (1 t : Ticket InProgress) -> (Int, Ticket Done)
-completeTask (MkTicket v) = (v * v, MkTicket v)
+completeTask : {n : Nat} -> (1 t : Ticket InProgress n) -> Either (Int, Ticket Done n) (Ticket Failed n)
+completeTask (MkTicket v) =
+  if (mod v 10) == 0
+     then Right (MkTicket v)
+     else Left (v * v, MkTicket v)
 
-deleteTicket : (1 t : Ticket Done) -> IO ()
+-- Retry — единственное место, где n уменьшается!
+-- Мы принимаем (S n) и возвращаем n.
+retryTicket : (1 t : Ticket Failed (S n)) -> Ticket Ready n
+retryTicket (MkTicket v) = MkTicket v
+
+deleteTicket : {n : Nat} -> (1 t : Ticket Done n) -> IO ()
 deleteTicket (MkTicket _) = pure ()
 
--- 5. Логика обработки (Чистая функция-протокол)
--- Гарантирует: Ready -> InProgress -> Done -> Delete
-processProtocol : (1 t : Ticket Ready) -> (Int, IO ())
-processProtocol t = 
-    let t2 = startTask t
-        (val, t3) = completeTask t2
-    in (val, deleteTicket t3)
+discardFailed : {n : Nat} -> (1 t : Ticket Failed n) -> IO ()
+discardFailed (MkTicket _) = putStrLn "Задача окончательно провалена"
 
--- 6. Воркер
+-- Добавим возможность удалить тикет в состоянии Ready (например, при истечении газа)
+cancelReady : {n : Nat} -> (1 _ : Ticket Ready n) -> IO ()
+cancelReady (MkTicket _) = putStrLn $ "Газ кончился, тикет отменен"
+
+
+-- Заметьте сигнатуру: (S n) означает, что нам нужен хотя бы 1 газ для попытки
+processProtocol : {n : Nat} -> (1 t : Ticket Ready (S n)) -> StepResult (S n)
+processProtocol t =
+  let t2 = startTask t in
+  case completeTask t2 of
+    Left (val, t3) => OK val (deleteTicket t3)
+    Right t_err =>
+      let (MkTicket v) = t_err in
+      if v > 100
+         then Abandoned v (discardFailed t_err)
+         else Recoverable (retryTicket t_err)
+
+-- Здесь n — это количество попыток
+handleJob : Int -> (n : Nat) -> (1 t : Ticket Ready n) -> Channel Result -> IO ()
+handleJob id Z t outChan = do
+  case t of
+    (MkTicket v) => do
+      putStrLn "Газ кончился для \{show v}"
+      channelPut outChan (Failure 0)
+
+handleJob id (S k) t outChan =
+  case processProtocol t of
+    OK val cleanup => do
+      cleanup
+      channelPut outChan (Res val)
+    Recoverable t_ready => do
+      putStrLn "Retry..."
+      handleJob id k t_ready outChan
+    Abandoned val cleanup => do
+      cleanup
+      channelPut outChan (Failure val)
+
+
 worker : (id : Int) -> Channel Task -> Channel Result -> IO ()
 worker id inChan outChan = do
   msg <- channelGet inChan
   case msg of
-    Job t => do
-      -- Здесь t имеет вес 1
-      let 1 t = t
-      let (res, cleanup) = processProtocol t
-          --(res', cleanup') = processProtocol t  -- Second task execution will fail
-      cleanup
-      channelPut outChan (Res res)
+    Job {n} t => do -- Извлекаем n из Job
+--      let 1 t = t
+      handleJob id n t outChan
       worker id inChan outChan
     Die => pure ()
 
@@ -62,12 +105,18 @@ main = do
 
   -- Раздача задач
   let jobs = [1..10]
-  ignore $ fork $ traverse_ (\j => channelPut tasks (Job (MkTicket j))) jobs
+  -- Указываем, что у каждой задачи будет 3 попытки
+  ignore $ fork $ traverse_ (\j => channelPut tasks (Job (MkTicket j {n=3}))) jobs
+
 
   -- Сбор результатов
-  traverse_ (\_ => do
-    Res res <- channelGet results
-    putStrLn "Result: \{show res}") jobs
+  -- Явно указываем тип лямбды, чтобы Idris понял: мы в IO
+  traverse_ (\_ => (the (IO ()) $ do
+      resMsg <- channelGet results
+      case resMsg of
+           Res val => putStrLn "Успех: \{show val}"
+           Failure val => putStrLn "Провал: \{show val}"
+    )) jobs
 
   -- Закрытие
   channelPut tasks Die
