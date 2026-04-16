@@ -1,5 +1,8 @@
 module Main
 
+import System.File
+import Language.JSON
+import JSON
 import System.Concurrency
 import Data.List
 import Worker
@@ -8,24 +11,36 @@ spawnPool : Int -> Channel Task -> Channel Result -> IO ()
 spawnPool count tasks results = 
   ignore $ fork $ traverse_ (\i => fork (worker i tasks results)) [1..count]
 
+-- Загрузка задач теперь явно сигнализирует о неудаче
+loadTasks : String -> IO (Maybe (List ProcessTask))
+loadTasks filename = do
+  res <- readFile filename
+  case res of
+    Left err => do
+      putStrLn "Error: Config file '\{filename}' not found (\{show err})"
+      pure Nothing
+    Right content =>
+      case decode {a = List ProcessTask} content of
+        Right tasks => pure (Just tasks)
+        Left err    => do
+          putStrLn "Error: Failed to parse JSON in '\{filename}': \{err}"
+          pure Nothing
+
 main : IO ()
 main = do
-  putStrLn "=== Linux Process Worker Pool ==="
+  putStrLn "=== Linux Process Worker Pool (Auto-JSON) ==="
+
+  -- 1. Пытаемся загрузить конфиг
+  Just tasksFromConfig <- loadTasks "tasks.json"
+    | Nothing => putStrLn "Shutting down due to config error."
+
   
   tasks <- the (IO (Channel Task)) makeChannel
   results <- the (IO (Channel Result)) makeChannel
   
   spawnPool 2 tasks results
   
-  -- Список реальных задач
-  let jobs = [
-        MKProcessTask "List files" "/run/current-system/sw/bin/eza" ["-la", "/"] 2,
-        MKProcessTask "Fast sleep" "sleep" ["0.5"] 2,
-        MKProcessTask "Long sleep (Timeout Test)" "sleep" ["5"] 1,
-        MKProcessTask "Invalid binary" "/usr/bin/not-exist" [] 1
-      ]
-  
-  ignore $ fork $ traverse_ (\j => channelPut tasks (Job (MkTicket j {n=2}))) jobs
+  ignore $ fork $ traverse_ (\j => channelPut tasks (Job (MkTicket j {n=2}))) tasksFromConfig
 
   -- Сбор ответов
   traverse_ (\_ => (the (IO ()) $ do
