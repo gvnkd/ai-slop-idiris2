@@ -66,6 +66,23 @@
         "type": "github"
       }
     },
+    "idris2-async-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1772305487,
+        "narHash": "sha256-iG2EXxIUr2GuZghJemawQIF43Q3na+gHiepWLn2wGFA=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-async",
+        "rev": "ce1764384fcf024c135ae97d97894c696c31f505",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "ref": "ce1764384fcf024c135ae97d97894c696c31f505",
+        "repo": "idris2-async",
+        "type": "github"
+      }
+    },
     "idris2-bytestring-src": {
       "flake": false,
       "locked": {
@@ -82,6 +99,38 @@
         "type": "github"
       }
     },
+    "idris2-containers-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1736318525,
+        "narHash": "sha256-wj+KTfMarA3HsL+sK3A1s0BhuRDgsaTGDfUPxkpNCVs=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-containers",
+        "rev": "9ae2d67168c0bf184e0608eb3eb2e6a372a01f1c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-containers",
+        "type": "github"
+      }
+    },
+    "idris2-cptr-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773821768,
+        "narHash": "sha256-ONAaY/h1HPUaNaoEvdb8M3Lfh6CgN+eAqAfz0neW5ls=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-cptr",
+        "rev": "63f224d52af5c5655f022fb9c9a6edd34feefd50",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-cptr",
+        "type": "github"
+      }
+    },
     "idris2-elab-util-src": {
       "flake": false,
       "locked": {
@@ -95,6 +144,38 @@
       "original": {
         "owner": "stefan-hoeck",
         "repo": "idris2-elab-util",
+        "type": "github"
+      }
+    },
+    "idris2-elin-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1752226502,
+        "narHash": "sha256-sG1cFnOI8SDFEV/qwu2vEQY2hD+0Kp72Z198/LCY1tA=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-elin",
+        "rev": "c66a6709397431150235e8bdddc0a21fcbedb7de",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-elin",
+        "type": "github"
+      }
+    },
+    "idris2-finite-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1679319996,
+        "narHash": "sha256-rCqDXN2FC5vGCJCZOh085df1cDKCMQXqhsojPQa5b18=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-finite",
+        "rev": "5d9a9de5466030f3ffc5a0c2ad4ef647bc882a30",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-finite",
         "type": "github"
       }
     },
@@ -127,6 +208,22 @@
       "original": {
         "owner": "stefan-hoeck",
         "repo": "idris2-json",
+        "type": "github"
+      }
+    },
+    "idris2-linux-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773822516,
+        "narHash": "sha256-EyEcUqhJwTKdNwF1Rl18C4KROpt8jqXJo/tFQMFYke0=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-linux",
+        "rev": "f34c638ce71f0a46b8b0ef471e2a43e9a91a5853",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-linux",
         "type": "github"
       }
     },
@@ -232,10 +329,16 @@
         "idris2-algebra-src": "idris2-algebra-src",
         "idris2-ansi-src": "idris2-ansi-src",
         "idris2-array-src": "idris2-array-src",
+        "idris2-async-src": "idris2-async-src",
         "idris2-bytestring-src": "idris2-bytestring-src",
+        "idris2-containers-src": "idris2-containers-src",
+        "idris2-cptr-src": "idris2-cptr-src",
         "idris2-elab-util-src": "idris2-elab-util-src",
+        "idris2-elin-src": "idris2-elin-src",
+        "idris2-finite-src": "idris2-finite-src",
         "idris2-ilex-src": "idris2-ilex-src",
         "idris2-json-src": "idris2-json-src",
+        "idris2-linux-src": "idris2-linux-src",
         "idris2-parser-src": "idris2-parser-src",
         "idris2-quantifiers-extra-src": "idris2-quantifiers-extra-src",
         "idris2-ref1-src": "idris2-ref1-src",

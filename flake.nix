@@ -16,6 +16,14 @@
     idris2-ref1-src = { url = "github:stefan-hoeck/idris2-ref1"; flake = false; };
     idris2-refined-src = { url = "github:stefan-hoeck/idris2-refined"; flake = false; };
     idris2-quantifiers-extra-src = { url = "github:stefan-hoeck/idris2-quantifiers-extra"; flake = false; };
+    idris2-linux-src = { url = "github:stefan-hoeck/idris2-linux"; flake = false; };
+    idris2-cptr-src = { url = "github:stefan-hoeck/idris2-cptr"; flake = false; };
+    idris2-elin-src = { url = "github:stefan-hoeck/idris2-elin"; flake = false; };
+    idris2-finite-src = { url = "github:stefan-hoeck/idris2-finite"; flake = false; };
+    #idris2-async-src = { url = "github:stefan-hoeck/idris2-async"; flake = false; };
+    # two latest commits won't compile
+    idris2-async-src = { url = "github:stefan-hoeck/idris2-async?ref=ce1764384fcf024c135ae97d97894c696c31f505"; flake = false; };
+    idris2-containers-src = { url = "github:stefan-hoeck/idris2-containers"; flake = false; };
   };
 
   outputs = { self, nixpkgs, flake-utils,
@@ -31,6 +39,12 @@
       idris2-ref1-src,
       idris2-refined-src,
       idris2-quantifiers-extra-src,
+      idris2-linux-src,
+      idris2-cptr-src,
+      idris2-elin-src,
+      idris2-finite-src,
+      idris2-async-src,
+      idris2-containers-src,
     }:
     flake-utils.lib.eachDefaultSystem (system:
       let
@@ -54,10 +68,8 @@
             # Устанавливаем IDRIS2_PREFIX, чтобы install не лез в системные пути
             export IDRIS2_PREFIX=$out
             idris2 --install "$IPKG"
-            if [[ -d ./lib ]]; then
-              mkdir $out/lib
-              cp ./lib/*.so $out/lib/
-            fi
+            mkdir $out/lib
+            find ./ -type f -name '*.so' -exec cp {} $out/lib/ \;
           '';
         };
 
@@ -75,10 +87,24 @@
         json = buildIdris { pname = "json"; src = idris2-json-src; deps = [ parser elab-util ilex-core ilex-json bytestring algebra array ref1 ilex refined ]; };
         ansi = buildIdris { pname = "ansi"; src = idris2-ansi-src; };
         elab-util = buildIdris { pname = "elab-util"; ipkgs = "elab-util"; src = idris2-elab-util-src; };
+        elin = buildIdris { pname = "elin"; src = idris2-elin-src; deps = [ quantifiers-extra ref1 ]; };
+        cptr = buildIdris { pname = "cptr"; src = idris2-cptr-src; deps = [ elin quantifiers-extra ref1 array algebra ]; };
+        finite = buildIdris { pname = "finite"; src = idris2-finite-src; deps = [ elab-util ]; };
+        async = buildIdris { pname = "async"; src = idris2-async-src; deps = [ array algebra ref1 containers elab-util elin quantifiers-extra ]; };
+        async-epoll = buildIdris { pname = "async-epoll"; ipkgs = "async-epoll/async-epoll"; src = idris2-async-src; deps = [ linux async async-posix posix bytestring cptr ansi finite array algebra ref1 containers elab-util elin quantifiers-extra ]; };
+        async-posix = buildIdris { pname = "async-posix"; ipkgs = "async-posix/async-posix"; src = idris2-async-src; deps = [ async posix array bytestring cptr finite ansi algebra ref1 containers elab-util elin quantifiers-extra ]; };
+        containers = buildIdris { pname = "containers"; src = idris2-containers-src; deps = [ elab-util ]; };
+        posix = buildIdris { pname = "posix"; ipkgs = "posix/posix"; src = idris2-linux-src; deps = [ bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
+        linux = buildIdris { pname = "linux"; ipkgs = "linux/linux"; src = idris2-linux-src; deps = [ posix bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
         tui = buildIdris { 
           pname = "tui"; 
           src = idris2-tui-src; 
           deps = [ ansi elab-util json parser bytestring algebra array ref1 ilex-core ilex-json ilex refined quantifiers-extra ]; 
+        };
+        tui-async = buildIdris { 
+          pname = "tui-async/tui-async"; 
+          src = idris2-tui-src; 
+          deps = [ async-posix linux ansi elab-util json parser bytestring algebra array ref1 ilex-core ilex-json ilex refined quantifiers-extra tui posix cptr elin finite async containers async-epoll ]; 
         };
 
       in {
@@ -86,6 +112,7 @@
           nativeBuildInputs = [ idris2 ];
           buildInputs = [
             tui
+            tui-async
             elab-util
             json
             parser
@@ -99,6 +126,7 @@
             refined
             ansi
             quantifiers-extra
+            posix linux cptr async async-epoll async-posix containers elin finite
           ];
           shellHook = ''
             export IDRIS2_PACKAGE_PATH="${pkgs.lib.makeSearchPath "idris2-${ver}" buildInputs }"
