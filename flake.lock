@@ -69,16 +69,15 @@
     "idris2-async-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1772305487,
-        "narHash": "sha256-iG2EXxIUr2GuZghJemawQIF43Q3na+gHiepWLn2wGFA=",
+        "lastModified": 1774099211,
+        "narHash": "sha256-98i4ukGi8ypTxSD5dVNl2EIZ2lzXw/4F2OvrrSsACw0=",
         "owner": "stefan-hoeck",
         "repo": "idris2-async",
-        "rev": "ce1764384fcf024c135ae97d97894c696c31f505",
+        "rev": "1cd4007efcce51efc79c2697a925608826f9d75d",
         "type": "github"
       },
       "original": {
         "owner": "stefan-hoeck",
-        "ref": "ce1764384fcf024c135ae97d97894c696c31f505",
         "repo": "idris2-async",
         "type": "github"
       }
@@ -102,15 +101,15 @@
     "idris2-containers-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1736318525,
-        "narHash": "sha256-wj+KTfMarA3HsL+sK3A1s0BhuRDgsaTGDfUPxkpNCVs=",
-        "owner": "stefan-hoeck",
+        "lastModified": 1774840893,
+        "narHash": "sha256-VTK8cWu3NflQ1E9jSSjeP6MbG+sx0HouBPBIE6c2U/k=",
+        "owner": "idris-community",
         "repo": "idris2-containers",
-        "rev": "9ae2d67168c0bf184e0608eb3eb2e6a372a01f1c",
+        "rev": "3568bb6d0be9f0c675cbf5f0ed4a120b4b767cb8",
         "type": "github"
       },
       "original": {
-        "owner": "stefan-hoeck",
+        "owner": "idris-community",
         "repo": "idris2-containers",
         "type": "github"
       }
@@ -176,6 +175,22 @@
       "original": {
         "owner": "stefan-hoeck",
         "repo": "idris2-finite",
+        "type": "github"
+      }
+    },
+    "idris2-hashable-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1764677803,
+        "narHash": "sha256-FO5sxlEJFIiNrluCrIH9ORFTUgldhbbG8C/r+pSD8T0=",
+        "owner": "Z-snails",
+        "repo": "idris2-hashable",
+        "rev": "af0b5e086d26777cbdedf0e1b5d7a9684d755da6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Z-snails",
+        "repo": "idris2-hashable",
         "type": "github"
       }
     },
@@ -336,6 +351,7 @@
         "idris2-elab-util-src": "idris2-elab-util-src",
         "idris2-elin-src": "idris2-elin-src",
         "idris2-finite-src": "idris2-finite-src",
+        "idris2-hashable-src": "idris2-hashable-src",
         "idris2-ilex-src": "idris2-ilex-src",
         "idris2-json-src": "idris2-json-src",
         "idris2-linux-src": "idris2-linux-src",
