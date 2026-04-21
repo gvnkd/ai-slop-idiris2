@@ -27,14 +27,10 @@ onKey Down st =
                  S n => n
       newSel = min maxIdx (st.selected + 1)
   in update $ { selected := newSel, logOffset := 0, logColOffset := 0 } st
-onKey (Alpha 'j') st =
-  let logs = getSelectedLogs st
-      maxOffset = case length logs of
-                    0   => 0
-                    S n => n
-      newOffset = min maxOffset (st.logOffset + 1)
-  in update $ { logOffset := newOffset } st
 onKey (Alpha 'k') st =
+  let newOffset = st.logOffset + 1
+  in update $ { logOffset := newOffset } st
+onKey (Alpha 'j') st =
   let newOffset = case st.logOffset of
                     0   => 0
                     S n => n

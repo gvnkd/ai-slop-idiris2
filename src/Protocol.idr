@@ -9,14 +9,22 @@ import JSON.Derive
 public export
 record ProcessTask where
   constructor MKProcessTask
-  name    : String       -- Краткое имя для логов
-  path    : String       -- Полный путь к бинарнику
-  args    : List String  -- Список аргументов
-  timeout : Int          -- Тайм-аут в секундах
-  logFile : Maybe String
+  name       : String       -- Краткое имя для логов
+  path       : String       -- Полный путь к бинарнику
+  args       : List String  -- Список аргументов
+  timeout    : Int          -- Тайм-аут в секундах
+  logFile    : Maybe String
+  blockingIO : Maybe Bool
 
--- Генерируем реализацию интерфейса FromJSON
-%runElab derive "ProcessTask" [FromJSON]
+export
+FromJSON ProcessTask where
+  fromJSON = withObject "ProcessTask" $ \o =>
+    [| MKProcessTask (field      o "name")
+                     (field      o "path")
+                     (field      o "args")
+                     (field      o "timeout")
+                     (field      o "logFile")
+                     (fieldMaybe o "blockingIO") |]
 
 public export
 data TaskState = Ready | InProgress | Done | Failed

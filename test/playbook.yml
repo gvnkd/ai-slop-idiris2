@@ -1,0 +1,9 @@
+- name: Ping localhost 20 times
+  hosts: localhost
+  connection: local
+  tasks:
+    - ping:
+      register: result
+      until: result is succeeded
+      retries: 20
+      delay: 1

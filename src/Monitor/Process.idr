@@ -39,6 +39,9 @@ prim__fcntl : Int -> Int -> PrimIO Int
 %foreign "C:fcntl,libc"
 prim__fcntl_set : Int -> Int -> Int -> PrimIO Int
 
+%foreign "C:open,libc"
+prim__open : String -> Int -> PrimIO Int
+
 public export
 record ProcInfo where
   constructor MkProcInfo
@@ -72,6 +75,12 @@ spawnCmd task = do
           _ <- primIO $ prim__dup2 writeFd 1
           _ <- primIO $ prim__dup2 writeFd 2
           _ <- primIO $ prim__close writeFd
+          let blk = fromMaybe True task.blockingIO
+          when blk $ do
+            devnull <- primIO $ prim__open "/dev/null" 0
+            _ <- primIO $ prim__dup2 devnull 0
+            _ <- primIO $ prim__close devnull
+            pure ()
           argsArr <- fromList [Just "sh", Just "-c", Just cmd, Nothing]
           _ <- primIO $ prim__execvp "/bin/sh" (unsafeUnwrap argsArr)
           free argsArr
@@ -79,7 +88,7 @@ spawnCmd task = do
           pure Nothing
         else do
           _ <- primIO $ prim__close writeFd
-          flags <- primIO $ prim__fcntl readFd 1
+          flags <- primIO $ prim__fcntl readFd 3
           _ <- primIO $ prim__fcntl_set readFd 4 (flags .|. 2048)
           pure $ Just $ MkProcInfo task.name (MkFd readBits) childPid ""
 

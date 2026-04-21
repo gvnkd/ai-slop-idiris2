@@ -7,6 +7,7 @@ import JSON
 import System.Concurrency
 import Data.List
 import Worker
+import Protocol
 
 spawnPool : Int -> Channel Task -> Channel Result -> IO ()
 spawnPool count tasks results = 

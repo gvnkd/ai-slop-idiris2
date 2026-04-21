@@ -4,41 +4,47 @@
     "path": "ls",
     "args": ["-la", "./"],
     "timeout": 2,
-    "logFile": "logs/root_dir.log"
+    "logFile": "logs/root_dir.log",
+    "blockingIO": false
   },
   {
     "name": "Quick Sleep",
     "path": "sleep",
     "args": ["0.5"],
     "timeout": 1,
-    "logFile": "logs/timeout_error.log"
+    "logFile": "logs/timeout_error.log",
+    "blockingIO": false
   },
   {
     "name": "Watch",
-    "path": "ps",
-    "args": ["aux"],
+    "path": "cat",
+    "args": ["/dev/urandom"],
     "timeout": 30,
-    "logFile": null
-  },
-  {
-    "name": "molecule",
-    "path": "molecule",
-    "args": ["test"],
-    "timeout": 300,
-    "logFile": null
+    "logFile": null,
+    "blockingIO": false
   },
   {
     "name": "Timed Out Task",
     "path": "sleep",
     "args": ["5"],
     "timeout": 1,
-    "logFile": null
+    "logFile": null,
+    "blockingIO": false
+  },
+  {
+    "name": "ansible",
+    "path": "ansible-playbook",
+    "args": ["test/playbook.yml"],
+    "timeout": 300,
+    "logFile": null,
+    "blockingIO": true
   },
   {
     "name": "Missing Binary Test",
     "path": "/usr/bin/not-exist",
     "args": [],
     "timeout": 5,
-    "logFile": null
+    "logFile": null,
+    "blockingIO": false
   }
 ]

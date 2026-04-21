@@ -1,0 +1,45 @@
+diff --git a/src/Monitor/Handler.idr b/src/Monitor/Handler.idr
+index 32e1b86..af49e34 100644
+--- a/src/Monitor/Handler.idr
++++ b/src/Monitor/Handler.idr
+@@ -27,14 +27,10 @@ onKey Down st =
+                  S n => n
+       newSel = min maxIdx (st.selected + 1)
+   in update $ { selected := newSel, logOffset := 0, logColOffset := 0 } st
+-onKey (Alpha 'j') st =
+-  let logs = getSelectedLogs st
+-      maxOffset = case length logs of
+-                    0   => 0
+-                    S n => n
+-      newOffset = min maxOffset (st.logOffset + 1)
+-  in update $ { logOffset := newOffset } st
+ onKey (Alpha 'k') st =
++  let newOffset = st.logOffset + 1
++  in update $ { logOffset := newOffset } st
++onKey (Alpha 'j') st =
+   let newOffset = case st.logOffset of
+                     0   => 0
+                     S n => n
+diff --git a/src/Monitor/View.idr b/src/Monitor/View.idr
+index bc9fc32..c57fe0b 100644
+--- a/src/Monitor/View.idr
++++ b/src/Monitor/View.idr
+@@ -72,6 +72,9 @@ paintLogLines window colOffset (line :: rest) =
+       remaining <- packTop Normal window trimmed
+       paintLogLines remaining colOffset rest
+ 
++autoScrollOffset : Nat -> Nat -> List LogLine -> Nat
++autoScrollOffset viewH scrollUp logs = minus (length logs) viewH `minus` scrollUp
++
+ export covering
+ View JobMonitorState where
+   size _ = MkArea 80 24
+@@ -104,7 +107,7 @@ View JobMonitorState where
+       [] => do
+         sgr [SetForeground White, SetBackground Blue]
+         showTextAt right.nw "No log output"
+-      _  => paintLogLines right st.logColOffset (drop st.logOffset logs)
++      _  => paintLogLines right st.logColOffset (drop (autoScrollOffset right.height st.logOffset logs) logs)
+     sgr [SetForeground White, SetBackground Blue]
+     showTextAt legendArea.nw "↑↓:jobs  j/k:vscroll  h/l:hscroll  q:quit"
+     sgr [Reset]

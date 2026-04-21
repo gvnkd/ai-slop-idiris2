@@ -72,6 +72,9 @@ paintLogLines window colOffset (line :: rest) =
       remaining <- packTop Normal window trimmed
       paintLogLines remaining colOffset rest
 
+autoScrollOffset : Nat -> Nat -> List LogLine -> Nat
+autoScrollOffset viewH scrollUp logs = minus (length logs) viewH `minus` scrollUp
+
 export covering
 View JobMonitorState where
   size _ = MkArea 80 24
@@ -104,7 +107,7 @@ View JobMonitorState where
       [] => do
         sgr [SetForeground White, SetBackground Blue]
         showTextAt right.nw "No log output"
-      _  => paintLogLines right st.logColOffset (drop st.logOffset logs)
+      _  => paintLogLines right st.logColOffset (drop (autoScrollOffset right.height st.logOffset logs) logs)
     sgr [SetForeground White, SetBackground Blue]
     showTextAt legendArea.nw "↑↓:jobs  j/k:vscroll  h/l:hscroll  q:quit"
     sgr [Reset]
