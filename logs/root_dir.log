@@ -1,16 +1,18 @@
 === Log for List Root Directory ===
-drwxr-xr-x    - pion 16 Apr 00:44 .direnv
-.rw-r--r--   10 pion 15 Apr 23:14 .envrc
-drwxr-xr-x    - pion 16 Apr 19:32 .git
-.rw-r--r--   22 pion 16 Apr 17:50 .gitignore
-.rw-r--r--  823 pion 16 Apr 19:22 amon.ipkg
-drwxr-xr-x    - pion 16 Apr 15:02 build
-.rw-r--r-- 7.7k pion 16 Apr 00:12 flake.lock
-.rw-r--r-- 5.7k pion 16 Apr 00:43 flake.nix
-drwxr-xr-x    - pion 16 Apr 19:43 logs
-.rw-r--r--  182 pion 15 Apr 21:27 mon.ipkg
-.rw-r--r--  131 pion 15 Apr 20:21 pack.toml
-drwxr-xr-x    - pion 16 Apr 17:47 pg
-.rw-r--r--  433 pion 16 Apr 12:16 README.md
-drwxr-xr-x    - pion 16 Apr 19:42 src
-.rw-r--r--  531 pion 16 Apr 19:43 tasks.json
+total 80
+drwxrwxr-x 7 user user  4096 Apr 19 01:02 .
+drwxrwxr-x 3 user user  4096 Apr 19 00:37 ..
+-rw-rw-r-- 1 user user   823 Apr 19 00:37 amon.ipkg
+drwxr-xr-x 4 user user  4096 Apr 19 01:02 build
+-rw-rw-r-- 1 user user    10 Apr 19 00:37 .envrc
+-rw-rw-r-- 1 user user 10796 Apr 19 00:37 flake.lock
+-rw-rw-r-- 1 user user  8364 Apr 19 00:37 flake.nix
+drwxrwxr-x 8 user user  4096 Apr 19 00:40 .git
+-rw-rw-r-- 1 user user    22 Apr 19 00:37 .gitignore
+drwxrwxr-x 2 user user  4096 Apr 19 00:37 logs
+-rw-rw-r-- 1 user user   182 Apr 19 00:37 mon.ipkg
+-rw-rw-r-- 1 user user   131 Apr 19 00:37 pack.toml
+drwxrwxr-x 2 user user  4096 Apr 19 00:37 pg
+-rw-rw-r-- 1 user user   433 Apr 19 00:37 README.md
+drwxrwxr-x 2 user user  4096 Apr 19 00:37 src
+-rw-rw-r-- 1 user user   530 Apr 19 01:04 tasks.json

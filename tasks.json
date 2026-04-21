@@ -1,7 +1,7 @@
 [
   {
     "name": "List Root Directory",
-    "path": "eza",
+    "path": "ls",
     "args": ["-la", "./"],
     "timeout": 2,
     "logFile": "logs/root_dir.log"
@@ -12,6 +12,20 @@
     "args": ["0.5"],
     "timeout": 1,
     "logFile": "logs/timeout_error.log"
+  },
+  {
+    "name": "Watch",
+    "path": "ps",
+    "args": ["aux"],
+    "timeout": 30,
+    "logFile": null
+  },
+  {
+    "name": "molecule",
+    "path": "molecule",
+    "args": ["test"],
+    "timeout": 300,
+    "logFile": null
   },
   {
     "name": "Timed Out Task",

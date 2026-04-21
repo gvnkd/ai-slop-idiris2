@@ -6,7 +6,7 @@ readme     = "README.md"
 license    = "MIT"
 
 -- Главный модуль приложения
-main       = Main
+main       = Monitor.Main
 
 -- Имя исполняемого файла
 executable = amon
@@ -14,17 +14,26 @@ executable = amon
 -- Папка с исходным кодом
 sourcedir  = "src"
 
--- Зависимости
--- 'linear' и 'contrib' критичны для нашего кода
 depends    = base >= 0.5.1
            , contrib
            , linear
            , json
            , elab-util
+           , ansi
+           , tui
+           , tui-async
+           , posix
 
--- Список всех модулей проекта для корректной сборки
 modules    = Protocol
            , Worker
+           , Monitor.Types
+           , Monitor.Mock
+           , Monitor.Provider
+           , Monitor.Process
+           , Monitor.Source
+           , Monitor.View
+           , Monitor.Handler
+           , Monitor.Main
            , Main
 
 -- Опции компилятора (например, для проверки тотальности по умолчанию)
