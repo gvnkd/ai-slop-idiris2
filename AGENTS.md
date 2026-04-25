@@ -58,9 +58,22 @@ base, contrib, linear, json, elab-util, ansi, tui, tui-async, posix
 
 `build/` is gitignored. Contains compiled executables (`build/exec/`) and TTC files (`build/ttc/`).
 
-### Testing
+### Testing with zrun
 
-No automated test suite. Manual testing only: build and run `./build/exec/amon`, verify TUI renders and handles tasks from `tasks.json`.
+`zrun` launches the amon TUI inside a headless Zellij session, enabling automated screen dumps and key injection for testing.
+
+```
+./zrun                          # Start amon in headless Zellij session
+./zrun --screen                 # Dump TUI screen to stdout
+./zrun --send-keys Down Down    # Send keys to the pane
+./zrun --subscribe              # Stream viewport updates as NDJSON
+./zrun --status                 # Show session/pane status
+./zrun --stop                   # Kill the session
+```
+
+`zrun` generates a temporary Zellij layout at runtime with `cwd` set to the project directory. The layout is cleaned up on exit. Requires `zellij` and `python3` (for JSON pane parsing).
+
+The "Watch" task in `tasks.json` runs `cat /dev/urandom | xxd` to produce readable, continuous output for testing live rendering.
 
 ### `docs/`
 
