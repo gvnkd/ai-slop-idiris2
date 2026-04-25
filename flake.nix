@@ -113,6 +113,7 @@
         devShells.default = pkgs.mkShell rec {
           nativeBuildInputs = [ idris2 ];
           buildInputs = [
+            pkgs.python3
             tui
             tui-async
             elab-util
