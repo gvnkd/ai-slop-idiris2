@@ -18,7 +18,7 @@
   {
     "name": "Watch",
     "path": "cat",
-    "args": ["/dev/urandom"],
+    "args": ["/dev/urandom", "|", "xxd"],
     "timeout": 30,
     "logFile": null,
     "blockingIO": false

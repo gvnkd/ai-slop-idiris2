@@ -1,0 +1,434 @@
+#!/usr/bin/env bash
+#
+# zrun — Run the amon TUI inside a headless Zellij session.
+#
+# Usage:
+#   ./zrun                          # Run in detached mode
+#   ./zrun --rebuild                # Rebuild then run
+#   ./zrun --attach                 # Attach to the session interactively
+#   ./zrun --screen [pane-id]       # Dump current screen
+#   ./zrun --screen-file PATH       # Dump screen to file
+#   ./zrun --send-keys KEY [KEY...] # Send key(s) to the pane
+#   ./zrun --write-chars TEXT       # Write text to the pane
+#   ./zrun --subscribe              # Stream viewport updates (NDJSON)
+#   ./zrun --status                 # Show session status
+#   ./zrun --stop                   # Kill the session
+#
+# Key names: Enter, Escape, Tab, Space, Backspace, Up, Down, Left, Right,
+#            PageUp, PageDown, Home, End, Delete, Insert, F1-F12
+#            Ctrl-a, Ctrl-b, etc.
+#
+# Pane IDs can be found with: ./zrun --status
+# Or use the default (first terminal pane running amon).
+#
+# Examples:
+#   ./zrun                          # Start amon in headless zellij
+#   ./zrun --screen                 # See what the app looks like
+#   ./zrun --send-keys Down Enter   # Navigate and select
+#   ./zrun --write-chars "hello"    # Type text
+#   ./zrun --subscribe              # Live viewport stream
+#   ./zrun --stop                   # Clean up
+#
+
+set -euo pipefail
+
+SESSION="amon-tui"
+APP_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_BIN="${APP_DIR}/build/exec/amon"
+LAYOUT_FILE=$(mktemp --suffix=.kdl)
+BUILD_CMD="idris2 --build amon.ipkg 2>&1 && echo SUCCESS || echo FAILED"
+NO_DETAIL=false
+
+# Clean up temp layout on exit
+cleanup() {
+  rm -f "$LAYOUT_FILE"
+}
+trap cleanup EXIT
+
+# Generate layout with correct cwd
+cat > "$LAYOUT_FILE" <<KDL
+ui {
+  session_serialization false
+  show_startup_tips false
+  pane_frames false
+  simplified_ui true
+}
+
+layout {
+    pane name="amon" size=24 {
+        cwd "${APP_DIR}"
+    }
+}
+KDL
+
+# --- helpers ---
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+info() {
+  echo "INFO: $*"
+}
+
+# Run zellij with --session $SESSION prepended (for action/subscribe commands)
+zj() {
+  zellij --session "$SESSION" "$@"
+}
+
+# Check if session exists by listing sessions (top-level command, no --session)
+# Only match active sessions (not EXITED ones)
+session_exists() {
+  zellij list-sessions --no-formatting 2>/dev/null | grep "^${SESSION} " | grep -qv "EXITED"
+}
+
+# Find the pane running amon, or return the first terminal pane
+get_pane_id() {
+  local result
+  result=$(zj action list-panes --json 2>/dev/null | python3 -c "
+import sys, json
+panes = json.load(sys.stdin)
+# First try to find amon pane by title (contains the binary path)
+for p in panes:
+    title = p.get('title', '')
+    if 'amon' in title:
+        print(p['id'])
+        sys.exit(0)
+# Fallback: first non-plugin, non-exited terminal pane
+for p in panes:
+    if p.get('is_plugin') == False and p.get('exited') != True:
+        print(p['id'])
+        sys.exit(0)
+# Last resort: first terminal pane
+for p in panes:
+    if p.get('is_plugin') == False:
+        print(p['id'])
+        sys.exit(0)
+print('')
+" 2>/dev/null) || true
+  echo "$result"
+}
+
+# Wait for pane to appear, returns pane ID
+wait_for_pane() {
+  local retries=${1:-30}
+  local i
+  for ((i = 0; i < retries; i++)); do
+    local pid
+    pid=$(get_pane_id)
+    if [[ -n "$pid" ]]; then
+      echo "$pid"
+      return 0
+    fi
+    sleep 0.3
+  done
+  die "Pane not found after ${retries} attempts"
+}
+
+# Check if binary needs rebuilding
+needs_rebuild() {
+  [[ ! -f "$APP_BIN" ]] && return 0
+  [[ ! -d "${APP_DIR}/src" ]] && return 1
+  local newest_src
+  newest_src=$(find "${APP_DIR}/src" -name '*.idr' -exec stat -c '%Y' {} \; 2>/dev/null | sort -rn | head -1)
+  local bin_mtime
+  bin_mtime=$(stat -c '%Y' "$APP_BIN" 2>/dev/null || echo 0)
+  [[ "${newest_src:-0}" -gt "${bin_mtime:-0}" ]]
+}
+
+build_app() {
+  info "Building amon..."
+  (cd "$APP_DIR" && eval "$BUILD_CMD") || die "Build failed"
+}
+
+# --- key name mapping ---
+
+map_key() {
+  local key="$1"
+  case "$key" in
+    Enter)       echo "Enter" ;;
+    Escape)      echo "Escape" ;;
+    Esc)         echo "Escape" ;;
+    Tab)         echo "Tab" ;;
+    Space)       echo "Space" ;;
+    Backspace)   echo "Backspace" ;;
+    Up)          echo "Up" ;;
+    Down)        echo "Down" ;;
+    Left)        echo "Left" ;;
+    Right)       echo "Right" ;;
+    PageUp)      echo "PageUp" ;;
+    PageDown)    echo "PageDown" ;;
+    Home)        echo "Home" ;;
+    End)         echo "End" ;;
+    Delete)      echo "Delete" ;;
+    Insert)      echo "Insert" ;;
+    F1)          echo "F1" ;;
+    F2)          echo "F2" ;;
+    F3)          echo "F3" ;;
+    F4)          echo "F4" ;;
+    F5)          echo "F5" ;;
+    F6)          echo "F6" ;;
+    F7)          echo "F7" ;;
+    F8)          echo "F8" ;;
+    F9)          echo "F9" ;;
+    F10)         echo "F10" ;;
+    F11)         echo "F11" ;;
+    F12)         echo "F12" ;;
+    Ctrl-*)      echo "${key}" ;;
+    Alt-*)       echo "${key}" ;;
+    *)
+      # Single character — pass through
+      if [[ ${#key} -eq 1 ]]; then
+        echo "$key"
+      else
+        die "Unknown key: $key (use Enter, Escape, Ctrl-a, etc.)"
+      fi
+      ;;
+  esac
+}
+
+# --- commands ---
+
+cmd_start() {
+  # Check if session already exists
+  if session_exists; then
+    info "Session '$SESSION' already exists."
+    info "Use --attach to connect, or --stop to kill it first."
+    return 0
+  fi
+
+  # Build if needed
+  if needs_rebuild; then
+    build_app
+  else
+    info "Binary is up to date."
+  fi
+
+  # Verify binary exists
+  [[ -f "$APP_BIN" ]] || die "Binary not found at $APP_BIN"
+
+  # Create headless session with fixed layout (starts shell in project dir)
+  info "Starting headless session '$SESSION'..."
+  zellij --session "$SESSION" attach --create-background "$SESSION" options --default-layout "$LAYOUT_FILE"
+
+  # Wait for shell to be ready
+  sleep 2
+
+  # Get pane ID and send the amon binary command
+  local pane_id
+  pane_id=$(wait_for_pane 20)
+  info "Launching amon in pane $pane_id..."
+  LAUNCH_CMD="$APP_BIN"
+  if $NO_DETAIL; then
+    LAUNCH_CMD="$LAUNCH_CMD --no-detail"
+  fi
+  zj action write-chars --pane-id "$pane_id" "$LAUNCH_CMD"
+  zj action send-keys --pane-id "$pane_id" Enter
+
+  info "Session running."
+  info "Use --screen to view, --attach to interact, --stop to quit."
+}
+
+cmd_rebuild() {
+  # Check if session already exists
+  if session_exists; then
+    info "Session '$SESSION' already exists. Kill it first with: $0 --stop"
+    return 0
+  fi
+
+  build_app
+
+  # Create headless session with generated layout (starts shell in project dir)
+  info "Starting headless session '$SESSION'..."
+  zellij --session "$SESSION" attach --create-background "$SESSION" options --default-layout "$LAYOUT_FILE"
+
+  # Wait for shell to be ready
+  sleep 2
+
+  # Get pane ID and send the amon binary command
+  local pane_id
+  pane_id=$(wait_for_pane 20)
+  info "Launching amon in pane $pane_id..."
+  zj action write-chars --pane-id "$pane_id" "$APP_BIN"
+  zj action send-keys --pane-id "$pane_id" Enter
+
+  info "Session running."
+  info "Use --screen to view, --attach to interact, --stop to quit."
+}
+
+cmd_attach() {
+  if ! session_exists; then
+    die "Session '$SESSION' not found. Start it with: $0"
+  fi
+  zj attach "$SESSION"
+}
+
+cmd_screen() {
+  local pane_id="${1:-}"
+  if [[ -z "$pane_id" ]]; then
+    pane_id=$(wait_for_pane 20)
+  fi
+  zj action dump-screen --pane-id "$pane_id" --full
+}
+
+cmd_screen_file() {
+  local pane_id="${1:-}"
+  local path="${2:-/dev/stdout}"
+  if [[ -z "$pane_id" ]]; then
+    pane_id=$(wait_for_pane 20)
+  fi
+  zj action dump-screen --pane-id "$pane_id" --full --path "$path"
+}
+
+cmd_send_keys() {
+  if [[ $# -lt 1 ]]; then
+    die "Usage: $0 --send-keys KEY [KEY...]"
+  fi
+  local pane_id
+  pane_id=$(wait_for_pane 20)
+
+  info "Sending keys to pane $pane_id..."
+  local key
+  for key in "$@"; do
+    local mapped
+    mapped=$(map_key "$key")
+    zj action send-keys --pane-id "$pane_id" "$mapped"
+  done
+  info "Keys sent."
+}
+
+cmd_write_chars() {
+  if [[ $# -lt 1 ]]; then
+    die "Usage: $0 --write-chars TEXT"
+  fi
+  local pane_id
+  pane_id=$(wait_for_pane 20)
+
+  info "Writing chars to pane $pane_id..."
+  zj action write-chars --pane-id "$pane_id" "$1"
+  info "Chars written."
+}
+
+cmd_subscribe() {
+  local pane_id
+  pane_id=$(wait_for_pane 20)
+  info "Streaming viewport of pane $pane_id (Ctrl-C to stop)..."
+  zj subscribe --pane-id "$pane_id" --format json
+}
+
+cmd_status() {
+  echo "=== Zellij Session: $SESSION ==="
+
+  if ! session_exists; then
+    echo "Session not running."
+    return 0
+  fi
+
+  echo ""
+  echo "--- Panes ---"
+  zj action list-panes --json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    panes = json.load(sys.stdin)
+    for p in panes:
+        title = p.get('title', '')
+        exited = p.get('exited', False)
+        is_plugin = p.get('is_plugin', False)
+        if is_plugin:
+            continue
+        status = 'exited' if exited else 'running'
+        label = title if title else f\"Pane {p['id']}\"
+        print(f\"  {p['id']}: {label} ({status})\")
+except Exception as e:
+    print(f'  (error: {e})')
+" 2>/dev/null || echo "  (unable to query)"
+
+  echo ""
+  echo "--- Tabs ---"
+  zj action list-tabs --json 2>/dev/null | python3 -c "
+import sys, json
+try:
+    tabs = json.load(sys.stdin)
+    for t in tabs:
+        active = '*' if t.get('active') else ' '
+        print(f\"  {active} Tab {t['tab_id']}: {t.get('name', 'unnamed')}\")
+except Exception as e:
+    print(f'  (error: {e})')
+" 2>/dev/null || echo "  (unable to query)"
+}
+
+cmd_stop() {
+  if ! session_exists; then
+    info "Session '$SESSION' not found."
+    return 0
+  fi
+  info "Stopping session '$SESSION'..."
+  zellij kill-session "$SESSION" 2>/dev/null || true
+  info "Session stopped."
+}
+
+usage() {
+  cat <<'EOF'
+Usage: ./zrun [option] [args]
+
+Run the amon TUI inside a headless Zellij session.
+
+Options:
+  --rebuild          Rebuild the binary then run
+  --attach           Attach to the zellij session (interactive)
+  --screen [ID]      Dump screen of pane to stdout (finds amon pane if ID omitted)
+  --screen-file ID   Dump screen of pane to file (reads --path from zellij config)
+  --send-keys K1 K2  Send key(s) to the pane (Enter, Escape, Ctrl-a, etc.)
+  --write-chars TEXT Write character(s) to the pane
+  --subscribe        Stream viewport updates as NDJSON
+  --status           Show session and pane status
+  --stop             Kill the zellij session
+  --help             Show this help
+
+Key names: Enter, Escape, Esc, Tab, Space, Backspace,
+           Up, Down, Left, Right, PageUp, PageDown,
+           Home, End, Delete, Insert, F1-F12,
+           Ctrl-a, Alt-a, or single characters
+
+Examples:
+  ./zrun                          # Start amon in headless zellij
+  ./zrun --screen                 # View the screen
+  ./zrun --send-keys Down Enter   # Navigate and select
+  ./zrun --write-chars hello      # Type text
+  ./zrun --subscribe              # Live viewport stream
+  ./zrun --stop                   # Clean up
+EOF
+}
+
+# --- main ---
+
+# Parse flags that affect launch behavior
+# Strip leading --no-detail flags, then take the rest as the command + args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-detail)
+      NO_DETAIL=true
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+[[ $# -eq 0 ]] && { cmd_start; exit 0; }
+
+case "$1" in
+  --rebuild)     shift; cmd_rebuild "$@" ;;
+  --attach)      shift; cmd_attach "$@" ;;
+  --screen)      shift; cmd_screen "$@" ;;
+  --screen-file) shift; cmd_screen_file "$@" ;;
+  --send-keys)   shift; cmd_send_keys "$@" ;;
+  --write-chars) shift; cmd_write_chars "$@" ;;
+  --subscribe)   shift; cmd_subscribe "$@" ;;
+  --status)      shift; cmd_status "$@" ;;
+  --stop)        shift; cmd_stop "$@" ;;
+  --help|-h)     usage ;;
+  *)             die "Unknown option: $1" ;;
+esac
