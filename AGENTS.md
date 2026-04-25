@@ -22,7 +22,7 @@ This is my personal memory page. I want to store all my feelings and memories he
 
 ## Project: amon (Ansible Monitor TUI)
 
-Idris 2 TUI application that monitors long-running tasks (e.g., ansible playbooks) with a real-time terminal interface. Built with `idris2-tui` and `idris2-async`.
+Idris 2 TUI application that monitors long-running tasks (e.g., ansible playbooks) with a real-time terminal interface. Built with `idris2-tui` and `idris2-async`. Uses a worker pool (default: 3 parallel jobs); remaining tasks queue and start as slots free up.
 
 ### Environment Setup
 
@@ -40,6 +40,18 @@ idris2 --build amon.ipkg    # builds to build/exec/amon
 ```
 
 The main entry point is `Monitor.Main` (declared in `amon.ipkg`). The legacy `Main.idr` at root is a simpler worker-pool demo.
+
+### Worker Pool
+
+The TUI limits parallel task execution to a configurable number of workers (default: 3 in `Monitor.Main.run`). Tasks beyond the initial batch start in `QUEUED` status (`[Q]`), and are spawned as slots free up when running tasks complete.
+
+**Implementation:**
+- `Monitor.Main.run` splits `tasks.json` into initial batch (first N) and queued tasks
+- `Monitor.Source.resultsSource` takes `(List ProcInfo, List ProcessTask)` — active processes and queued tasks
+- When a process finishes, `resultsSource` spawns the next queued task using `liftIO . spawnCmd`
+- Queued jobs appear in the UI as `[Q]`, running as `[R]`, completed as `[+]`/`[x]`
+
+To change the worker count, modify `maxWorkers` in `Monitor.Main.run`.
 
 ### Source Layout
 

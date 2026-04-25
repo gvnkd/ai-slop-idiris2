@@ -9,6 +9,8 @@ import Monitor.Process
 import System.Posix.File
 import System.Posix.Process
 import System.Posix.Errno
+import Data.List
+import Data.Maybe
 
 emitLines : Has JobUpdate evts => String -> List String -> EventQueue evts -> NoExcept ()
 emitLines name lines queue =
@@ -17,8 +19,8 @@ emitLines name lines queue =
 
 public export
 covering
-resultsSource : Has JobUpdate evts => List ProcInfo -> EventSource evts
-resultsSource procs queue = loop procs
+resultsSource : Has JobUpdate evts => List ProcInfo -> List ProcessTask -> EventSource evts
+resultsSource procs taskQueue queue = loop procs taskQueue
   where
     onErrno : Errno -> NoExcept (Maybe ProcInfo)
     onErrno _ = pure Nothing
@@ -75,8 +77,12 @@ resultsSource procs queue = loop procs
       pure $ maybe ps' (:: ps') mp
 
     covering
-    loop : List ProcInfo -> NoExcept ()
-    loop procs = do
+    loop : List ProcInfo -> List ProcessTask -> NoExcept ()
+    loop procs taskQueue = do
       sleep 100.ms
       newProcs <- pollAll procs queue
-      loop newProcs
+      let freed = length procs `minus` length newProcs
+      let (toSpawn, remainingQueue) = splitAt (cast freed) taskQueue
+      spawned <- mapMaybe id <$> traverse (liftIO . spawnCmd) toSpawn
+      let allProcs = spawned ++ newProcs
+      loop allProcs remainingQueue
