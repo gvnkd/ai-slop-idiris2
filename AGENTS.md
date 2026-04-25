@@ -54,10 +54,6 @@ The main entry point is `Monitor.Main` (declared in `amon.ipkg`). The legacy `Ma
 
 base, contrib, linear, json, elab-util, ansi, tui, tui-async, posix
 
-### Patches
-
-`blocking_io.patch` and `scroll.patch` are unstaged diffs kept for reference. They are NOT applied. Do not commit them as source changes.
-
 ### Build Artifacts
 
 `build/` is gitignored. Contains compiled executables (`build/exec/`) and TTC files (`build/ttc/`).
