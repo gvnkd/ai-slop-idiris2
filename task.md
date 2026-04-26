@@ -1021,3 +1021,130 @@ implementation is thoroughly tested.
 - [ ] Process exit codes are reported correctly
 - [ ] `zrun --screen` shows correct output
 - [ ] No memory leaks (FDs are closed properly)
+
+# Review
+
+## Factual Corrections
+
+### Logging architecture mismatch (Step 1.4, Phase 3)
+
+The document describes log I/O as a major rewrite target, but mischaracterizes the current architecture. The TUI code path does NOT use `openLogFile` or `writeLogChunk` — those functions are orphaned (defined in `Process.idr:106-117` and `Process.idr:72-76` but never called from TUI code). The actual TUI logging works entirely through shell `tee` injected into the command string in `spawnCmd` (`Process.idr:123-128`). The only Idris-side log function called from the TUI path is `writeLogFooter` (`Source.idr:47,60,76`), which appends the `[END]` footer.
+
+**Correction:** The `tee`-based approach means the log file body is written by a separate process (the `tee` child), not by the Idris parent. Removing `tee` and moving logging into Idris is a genuine architectural change, not a refactor. The orphaned `openLogFile`/`writeLogChunk` can be deleted without impacting current behavior.
+
+### `ProcInfo.logPath` vs actual logging
+
+`spawnCmd` stores `task.logFile` into `ProcInfo.logPath` (`Process.idr:169`), which is used by `pollOne` to call `writeLogFooter`. However, the log file body is written by `tee` in the shell, NOT by the Idris code. `writeLogFooter` opens the file in append mode and writes the `[END]` line. This means the current system has a dependency on `tee` being available in `PATH`, and the log file format depends on shell behavior (the `[START]` header is written by `echo` in the shell command, not by Idris code).
+
+### `writeLogFooter` called inside `try [onErrno]` block
+
+`pollOne` calls `weakenErrors $ liftIO $ writeLogFooter ...` at lines 47, 60, 76 of `Source.idr`, all inside `try [onErrno]`. This is the exact anti-pattern warned about in `AGENTS.md` ("Adding `weakenErrors` calls inside a `try [handler]` block changes the error type from `[Errno]` to a broader type, causing unification failures"). The migration should address this by restructuring so footer writes happen outside any `try` block.
+
+## Critical Type Issues in the Proposed Approach
+
+### `>>` discards output — fundamental misunderstanding of Pull sequencing (Step 1.3)
+
+The document proposes at line 223:
+```idris
+bytes readFd 4096  -- Pull (Async Poll) ByteString [Errno] ()
+  >>               -- monadic bind: after stream ends,
+  waitpidAndReturn  -- Pull (Async Poll) ByteString [Errno] (Int, Maybe String)
+```
+
+This is incorrect. In a `Pull` monad, `p1 >> p2` produces a Pull whose output type is the output type of `p2`. The ByteStrings emitted by `bytes` would be the output of the combined Pull, but they'd be consumed by the downstream consumer (e.g., `drain`), NOT passed through to `waitpidAndReturn`. The `>>` operator sequences the EFFECTS, and the output flows to whatever consumes the combined Pull.
+
+**The real issue:** If the consumer of `spawnProcess` is `parJoin` + `drain`, the ByteString output IS consumed. But `waitpidAndReturn` would run AFTER all bytes are emitted, and its result `(Int, Maybe String)` would be the final result of the Pull, NOT emitted as output. This actually works for `drain` (which ignores output), but the types don't match: `drain` expects `Pull f Void es ()`, while the Pull above has result type `(Int, Maybe String)`.
+
+**Correction:** Use `observe` to capture the exit code as a side effect, or use a ref/mutvar to store it, then return `()` from the Pull:
+```idris
+spawnProcess task queue = do
+  (readFd, pid, logFd) <- exec $ liftIO $ setupProcess task
+  observe emitTUIEvent $ bytes readFd 4096
+  (_, status) <- exec $ liftIO $ waitpid pid WNOHANG
+  exec $ liftIO $ emitJobFinished task status queue
+  pure ()  -- drain expects Void output and () result
+```
+
+### Error type on `observe` callback (Step 1.5)
+
+The `observe` callback type is `(o -> f es ())`. The `emitTUIEvents` call writes to an event queue channel, which can fail (full channel, closed channel). The callback error type must match the Pull's error type `[Errno]`, but channel errors are NOT `Errno` — they're a different error type.
+
+**Correction:** The `observe` callback will need `weakenErrors` or equivalent to suppress channel errors, or the Pull error type needs to be broadened to include both `Errno` and channel errors. The document acknowledges this at Issue 8 but doesn't reflect it in the code sketches, which show bare `emitLine` calls without error handling.
+
+### `lines` + `UTF8.decode` composition order (Step 1.5)
+
+The document debates line-breaking order extensively (lines 278-339) but never reaches a clean final pipeline. The key constraint:
+
+1. `FS.Bytes.lines` operates on `ByteString` — it splits on `\n` bytes (0x0a)
+2. `UTF8.decode` converts `ByteString` → `String`
+
+If you decode first then line-break: you lose the ability to split on raw bytes efficiently.
+If you line-break first then decode: you get `(List ByteString)` per chunk, each element is a line in raw bytes.
+
+The final refined version at line 787 uses:
+```idris
+observe (\lineList => for_ lineList $ \line => ...) $ lines $ bytes readFd 4096
+```
+
+This is the correct order. However, there's a subtlety: `FS.Bytes.lines` splits on `\n` (0x0a) but does NOT strip `\r` (0x0d). Windows-style `\r\n` line endings will leave trailing `\r` on each line. The current `stripAnsi` operates on `String` and does NOT strip `\r` either (it only handles `\r` as a cursor column reset at line 210 of `Process.idr`). So this is consistent with current behavior, but worth documenting explicitly.
+
+### Partial line handling at stream end
+
+The document states at lines 744-757 that `FS.Bytes.lines` "emits any remaining partial line via the `last` function." This claim should be verified against the actual `streams` library implementation. If `scanFull` does NOT flush remaining state on stream termination, the final incomplete line will be silently dropped. The current code handles this in `pollOne` (line 38-40): on `NoData`/`EOI`, it calls `splitOutput p.pending ""` to flush the partial line. Any replacement must replicate this behavior.
+
+## spawnCmd Responsibilities Not Accounted For (Step 1.3)
+
+The document describes `spawnProcess` as replacing `spawnCmd`, but `spawnCmd` (`Process.idr:120-169`) does more than the plan accounts for:
+
+1. **`blockingIO` handling** (`Process.idr:157-159`): When `task.blockingIO` is `Just True`, stdin is redirected to `/dev/null`. The plan doesn't mention this.
+2. **Non-blocking FD setup** (`Process.idr:165-168`): The read FD is set to non-blocking via `fcntl`. `FS.Posix.bytes` may or may not require this — verify that `readnb` (used internally by `bytes`) works on blocking FDs.
+3. **`execvp` fallback** (`Process.idr:161-164`): If `execvp` fails, the child calls `_exit(127)`. The parent has no way to detect this vs. normal exit.
+
+## Minor Issues
+
+### Typo at line 194
+
+```idris
+```idras
+```
+Should be `idris`.
+
+### Typo at line 309
+
+"stream combator" → "stream combinator"
+
+### `cstr_timestamp` thread safety (Phase 4)
+
+`cstr_timestamp` uses a static buffer (`static char buf[64]`). While the current single-threaded code is fine, the streams library may invoke callbacks from multiple fibers within the epoll loop. If `cstr_timestamp` is called concurrently, the static buffer will be corrupted. The plan should either replace it with a thread-safe alternative or document this limitation.
+
+### `parJoin` output type mismatch with `drain`
+
+The document's `resultsSource` sketch at line 542 uses `drain $ parJoin maxWorkers outer`. `drain` has type `Pull f o es () -> Pull f Void es ()`. It consumes all output. But `parJoin` produces `AsyncStream Poll [Errno] ()` (output type `()`). So `drain` would produce `Pull (Async Poll) Void [Errno] ()`. Then `pull` gives `Async Poll [] (Outcome [Errno] ())`.
+
+This chains correctly, BUT: the inner streams (`processPull`) have output type `()`. `parJoin` merges their output. If `processPull` emits `()` values (which it does implicitly through the `do` block), `parJoin` produces a stream of `()`. The `drain` consumes them. This works but is wasteful — each inner stream completion emits a `()` that gets thrown away.
+
+**Better approach:** Use `foreach (const $ pure ())` or a purpose-built combinator instead of `drain`, to make the intent clearer. Or restructure `processPull` to not emit output at all (use `observe` for all side effects and `pure ()` at the end).
+
+### `EventSource` termination semantics
+
+The current `resultsSource` is an infinite loop (`loop` recurses forever). The proposed replacement terminates when `pull` completes (all tasks done). This means the TUI event source will shut down when all tasks finish. The TUI framework (`asyncMain`) may not handle event source termination gracefully — it might exit or hang. The current code's infinite loop keeps the TUI alive.
+
+**Correction:** The new `resultsSource` should either loop indefinitely after all tasks complete (emitting nothing), or the `Main.idr` should handle graceful shutdown separately. Consider adding an explicit "all done" signal or keeping a keep-alive source.
+
+### `maxWorkers` as runtime vs compile-time value
+
+`parJoin` takes a `Nat` literal (compile-time) or requires an `IsSucc` proof. The current `maxWorkers` is a runtime variable (`let maxWorkers = 3` in `Main.idr`). To use `parJoin`, it must be either hardcoded as a literal or passed with an explicit proof term. The document mentions this at Issue 2 but doesn't update the code sketches to reflect it.
+
+## Summary of Required Corrections
+
+| Location | Issue | Severity |
+|----------|--------|-----------|
+| Step 1.3, line 223 | `>>` sequencing — exit code result type incompatible with `drain` | Critical |
+| Step 1.5, line 415-427 | `observe` callback error type mismatch (channel vs Errno) | Critical |
+| Phase 3 | Orphaned functions (`openLogFile`, `writeLogChunk`) not identified as dead code | Minor |
+| Step 1.3 | Missing `blockingIO` and non-blocking FD setup from `spawnCmd` | Moderate |
+| Step 2.1, line 542 | `EventSource` termination — TUI may exit when all tasks done | Moderate |
+| Step 1.3 | Partial line flush at EOF not addressed | Moderate |
+| Throughout | `\r\n` line ending handling not mentioned | Minor |
+| Phase 4 | `cstr_timestamp` static buffer thread safety | Minor |
+| Step 2.1 | `maxWorkers` compile-time requirement not reflected in code | Minor |
