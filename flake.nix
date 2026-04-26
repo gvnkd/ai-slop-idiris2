@@ -24,6 +24,8 @@
     idris2-async-src = { url = "github:stefan-hoeck/idris2-async"; flake = false; };
     idris2-containers-src = { url = "github:idris-community/idris2-containers"; flake = false; };
     idris2-hashable-src = { url = "github:Z-snails/idris2-hashable"; flake = false; };
+    idris2-streams-src = { url = "github:stefan-hoeck/idris2-streams"; flake = false; };
+    idris2-filepath-src = { url = "github:stefan-hoeck/idris2-filepath"; flake = false; };
   };
 
   outputs = { self, nixpkgs, flake-utils,
@@ -46,6 +48,8 @@
       idris2-async-src,
       idris2-containers-src,
       idris2-hashable-src,
+      idris2-streams-src,
+      idris2-filepath-src,
     }:
     flake-utils.lib.eachDefaultSystem (system:
       let
@@ -98,6 +102,9 @@
         hashable = buildIdris { pname = "hashable"; src = idris2-hashable-src; deps = [ ]; };
         posix = buildIdris { pname = "posix"; ipkgs = "posix/posix"; src = idris2-linux-src; deps = [ bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
         linux = buildIdris { pname = "linux"; ipkgs = "linux/linux"; src = idris2-linux-src; deps = [ posix bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
+        filepath = buildIdris { pname = "filepath"; ipkgs = "filepath"; src = idris2-filepath-src; deps = [ hashable async containers posix bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
+        streams = buildIdris { pname = "streams"; ipkgs = "streams"; src = idris2-streams-src; deps = [ hashable async containers posix bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
+        streams-posix = buildIdris { pname = "streams-posix"; ipkgs = "posix/streams-posix"; src = idris2-streams-src; deps = [ filepath ansi async-posix hashable streams containers async posix bytestring algebra array ref1 cptr elin quantifiers-extra elab-util finite ]; };
         tui = buildIdris { 
           pname = "tui"; 
           src = idris2-tui-src; 
@@ -131,6 +138,8 @@
             quantifiers-extra
             posix linux cptr async async-epoll async-posix containers elin finite
             hashable
+            streams
+            streams-posix
           ];
           shellHook = ''
             export IDRIS2_PACKAGE_PATH="${pkgs.lib.makeSearchPath "idris2-${ver}" buildInputs }"

@@ -42,6 +42,12 @@ prim__fcntl_set : Int -> Int -> Int -> PrimIO Int
 %foreign "C:open,libc"
 prim__open : String -> Int -> PrimIO Int
 
+%foreign "C:cstr_write,cstr_write"
+prim__cstr_write : Int -> String -> PrimIO CInt
+
+%foreign "C:cstr_timestamp,cstr_write"
+prim__cstr_timestamp : PrimIO String
+
 public export
 record ProcInfo where
   constructor MkProcInfo
@@ -49,11 +55,79 @@ record ProcInfo where
   fd      : Fd
   pid     : Int
   pending : String
+  logPath : Maybe String
+
+export
+writeToFd : Int -> String -> IO CInt
+writeToFd fd s = primIO $ prim__cstr_write fd s
+
+export
+closeLogFd : Maybe Int -> IO ()
+closeLogFd Nothing = pure ()
+closeLogFd (Just fd) = do
+  ignore $ primIO $ prim__close fd
+  pure ()
+
+export
+writeLogChunk : Maybe Int -> String -> IO ()
+writeLogChunk Nothing _ = pure ()
+writeLogChunk (Just fd) chunk = do
+  _ <- writeToFd fd chunk
+  pure ()
+
+export
+getCurrentTimeStr : IO String
+getCurrentTimeStr = primIO prim__cstr_timestamp
+
+export
+writeLogFooter : String -> JobDisplayStatus -> IO ()
+writeLogFooter logPath status = do
+  ts <- getCurrentTimeStr
+  let statusStr := case status of
+                      SUCCESS => "SUCCESS"
+                      FAILED  => "FAILED"
+                      QUEUED  => "QUEUED"
+                      RUNNING => "RUNNING"
+  let footer := "[END] " ++ ts ++ " " ++ statusStr ++ "\n"
+  _ <- writeToFdAppend logPath footer
+  pure ()
+  where
+    writeToFdAppend : String -> String -> IO CInt
+    writeToFdAppend path content = do
+      fd <- primIO $ prim__open path 1025
+      if fd < 0
+        then pure (-1)
+        else do
+          result <- writeToFd fd content
+          ignore $ primIO $ prim__close fd
+          pure result
+
+export
+openLogFile : Maybe String -> IO (Maybe Int)
+openLogFile Nothing = pure Nothing
+openLogFile (Just path) = do
+  let flags := 544
+  fd <- primIO $ prim__open path flags
+  if fd < 0
+    then pure Nothing
+    else do
+      header <- getCurrentTimeStr
+      let headerLine := "[START] " ++ header ++ "\n"
+      _ <- writeToFd fd headerLine
+      pure $ Just fd
 
 export
 spawnCmd : ProcessTask -> IO (Maybe ProcInfo)
 spawnCmd task = do
-  let cmd = "timeout " ++ show task.timeout ++ "s " ++ task.path ++ " " ++ unwords task.args
+  let baseCmd = "timeout " ++ show task.timeout ++ "s " ++ task.path ++ " " ++ unwords task.args
+  ts <- getCurrentTimeStr
+  let (cmd, logPath) = case task.logFile of
+                        Nothing => (baseCmd, Nothing)
+                        Just lp =>
+                          let header := "[START] " ++ ts ++ "\n"
+                              wrapped := "{ echo '" ++ header ++ "' > " ++ lp ++ "; " ++
+                                         baseCmd ++ " 2>&1 | tee -a " ++ lp ++ "; }"
+                          in (wrapped, Just lp)
   pipeArr <- malloc Fd 2
   rc <- primIO $ prim__pipe (unsafeUnwrap pipeArr)
   if rc < 0
@@ -61,7 +135,9 @@ spawnCmd task = do
       free pipeArr
       pure Nothing
     else do
-      Just buf <- newBuffer 8 | Nothing => pure Nothing
+      Just buf <- newBuffer 8 | Nothing => do
+        free pipeArr
+        pure Nothing
       primIO $ prim__copy_pb (unsafeUnwrap pipeArr) buf 8
       free pipeArr
       readBits <- getBits32 buf 0
@@ -90,7 +166,7 @@ spawnCmd task = do
           _ <- primIO $ prim__close writeFd
           flags <- primIO $ prim__fcntl readFd 3
           _ <- primIO $ prim__fcntl_set readFd 4 (flags .|. 2048)
-          pure $ Just $ MkProcInfo task.name (MkFd readBits) childPid ""
+          pure $ Just $ MkProcInfo task.name (MkFd readBits) childPid "" task.logFile
 
 export
 splitOutput : String -> String -> (List String, String)

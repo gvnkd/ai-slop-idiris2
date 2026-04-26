@@ -42,6 +42,9 @@ resultsSource procs taskQueue queue = loop procs taskQueue
                                 Exited code => if code == 0 then SUCCESS else FAILED
                                 _ => FAILED
               weakenErrors $ putEvent queue $ JobFinished p.name jobStatus
+              case p.logPath of
+                Nothing => pure ()
+                Just lp => weakenErrors $ liftIO $ writeLogFooter lp jobStatus
               pure Nothing
         EOI => do
           (_, status) <- waitpid (the PidT $ cast p.pid) WNOHANG
@@ -52,6 +55,9 @@ resultsSource procs taskQueue queue = loop procs taskQueue
                             Exited code => if code == 0 then SUCCESS else FAILED
                             _ => FAILED
           weakenErrors $ putEvent queue $ JobFinished p.name jobStatus
+          case p.logPath of
+            Nothing => pure ()
+            Just lp => weakenErrors $ liftIO $ writeLogFooter lp jobStatus
           pure Nothing
         Res chunk => do
           let cleanChunk = stripAnsi chunk
@@ -65,6 +71,9 @@ resultsSource procs taskQueue queue = loop procs taskQueue
         Closed => do
           close p.fd
           weakenErrors $ putEvent queue $ JobFinished p.name FAILED
+          case p.logPath of
+            Nothing => pure ()
+            Just lp => weakenErrors $ liftIO $ writeLogFooter lp FAILED
           pure Nothing
         Interrupted => pure (Just p)
 

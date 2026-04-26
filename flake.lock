@@ -162,6 +162,22 @@
         "type": "github"
       }
     },
+    "idris2-filepath-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1772079922,
+        "narHash": "sha256-aEKa3mtqKirxqHmsOal/14oSv+PoMj3TvLEKhhpfqAY=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-filepath",
+        "rev": "4e8fe9af80d457adc63904ebf58e223ba35c62aa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-filepath",
+        "type": "github"
+      }
+    },
     "idris2-finite-src": {
       "flake": false,
       "locked": {
@@ -306,6 +322,22 @@
         "type": "github"
       }
     },
+    "idris2-streams-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1772790102,
+        "narHash": "sha256-PlvyUE87HIWORrO2fhJDx+cj0Nn4zpJHeNYItjOCDHs=",
+        "owner": "stefan-hoeck",
+        "repo": "idris2-streams",
+        "rev": "dd56316d102c4736ba24f47bea72fc3a9008585f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stefan-hoeck",
+        "repo": "idris2-streams",
+        "type": "github"
+      }
+    },
     "idris2-tui-src": {
       "flake": false,
       "locked": {
@@ -350,6 +382,7 @@
         "idris2-cptr-src": "idris2-cptr-src",
         "idris2-elab-util-src": "idris2-elab-util-src",
         "idris2-elin-src": "idris2-elin-src",
+        "idris2-filepath-src": "idris2-filepath-src",
         "idris2-finite-src": "idris2-finite-src",
         "idris2-hashable-src": "idris2-hashable-src",
         "idris2-ilex-src": "idris2-ilex-src",
@@ -359,6 +392,7 @@
         "idris2-quantifiers-extra-src": "idris2-quantifiers-extra-src",
         "idris2-ref1-src": "idris2-ref1-src",
         "idris2-refined-src": "idris2-refined-src",
+        "idris2-streams-src": "idris2-streams-src",
         "idris2-tui-src": "idris2-tui-src",
         "nixpkgs": "nixpkgs"
       }

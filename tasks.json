@@ -16,6 +16,14 @@
     "blockingIO": false
   },
   {
+    "name": "Colored Output",
+    "path": "ls",
+    "args": ["--color=always", "-la", "/"],
+    "timeout": 2,
+    "logFile": "logs/colored.log",
+    "blockingIO": false
+  },
+  {
     "name": "Watch",
     "path": "cat",
     "args": ["/dev/urandom", "|", "xxd"],
