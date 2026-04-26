@@ -24,13 +24,10 @@ run = do
   Just tasks <- loadTasks "tasks.json"
     | Nothing => die "Failed to load tasks.json"
   let maxWorkers = 3
-  let (initial, queued) = splitAt (cast maxWorkers) tasks
   let entries = toJobEntries tasks
-  procs <- mapMaybe id <$> traverse spawnCmd initial
-  let runningEntries = map (\e => { status := RUNNING } e) $ take (length initial) entries
-  let allEntries = runningEntries ++ drop (length initial) entries
-  let initState = initialState allEntries
-  let mainLoop = asyncMain {evts = [JobUpdate, Key]} [resultsSource procs queued]
+  let initState = initialState entries
+  let mainLoop = asyncMain {evts = [JobUpdate, Key]}
+                    [resultsSource 3 tasks]
   Prelude.ignore $ runView mainLoop handler initState
 
 covering

@@ -140,6 +140,7 @@
             hashable
             streams
             streams-posix
+            filepath
           ];
           shellHook = ''
             export IDRIS2_PACKAGE_PATH="${pkgs.lib.makeSearchPath "idris2-${ver}" buildInputs }"

@@ -23,6 +23,8 @@ depends    = base >= 0.5.1
            , tui
            , tui-async
            , posix
+           , streams
+           , streams-posix
 
 modules    = Protocol
            , Worker
@@ -30,6 +32,7 @@ modules    = Protocol
            , Monitor.Mock
            , Monitor.Provider
            , Monitor.Process
+           , Monitor.ProcessStream
            , Monitor.Source
            , Monitor.View
            , Monitor.Handler
