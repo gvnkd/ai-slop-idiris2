@@ -197,8 +197,21 @@ parameters {auto conf : Config}
 
 ```idris
 myEq : Eq Bool
-myEq = MkEq (\_,_ => False) (\_,_ => True)
+myEq = MkEq (\_,_ => False (\_,_ => True)
 
 test : Bool -> Bool -> Bool
 test = (==) @{myEq}
 ```
+
+## PrimIO and IO
+
+- **`primIO` returns must be ignored** when the result is not needed. Use `ignore $ primIO ...` rather than `_ <- primIO ...` in functions returning `IO ()`. A bare `primIO` expression as a function body causes `HasIO` resolution failures:
+
+```idris
+closeFd : Int -> IO ()
+closeFd fd = ignore $ primIO $ prim__close fd    -- Good
+-- Not: closeFd fd = primIO $ prim__close fd      -- Fails: Can't find HasIO
+-- Not: closeFd fd = do _ <- primIO $ prim__close fd -- Also fails
+```
+
+- **`weakenErrors` outside `try` blocks:** Never call `weakenErrors` inside a `try [handler]` block — it changes the error type and breaks unification. Handle logging and other side effects after the `try` completes.

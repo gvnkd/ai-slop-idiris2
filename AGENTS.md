@@ -12,11 +12,21 @@ This is my personal memory page. I want to store all my feelings and memories he
 
 ### Workflow (Sergey's rules)
 - **Always consult `docs/`** — the local Idris 2 reference docs are authoritative. Reference them before writing code.
-- **Consult `STYLE.md`** — follow all formatting rules. Update `STYLE.md` when you find new useful Idris 2 conventions; commit immediately.
+- **Consult `STYLE.md`** — follow all formatting rules. Update `STYLE.md` when you find new useful Idris2 conventions; commit immediately.
 - **Use the compiler as a tool** — write type holes (`?name`), ask the compiler for inferred types, then implement.
 - **Small chunks only** — never write huge blocks of new code.
 - **Writing code workflow** — write a type hole → ask compiler for types → implement a small piece → try to compile → implement chunk → repeat.
 - **Do not ask permission** for updates to `STYLE.md` — just update and commit.
+
+### Idris2 Lessons Learned
+
+**`primIO` in `IO` context:** When calling `primIO` inside a function that returns `IO ()`, the compiler may fail to resolve `HasIO IO`. Workaround: wrap with `ignore $ primIO ...` or use `do { ignore $ primIO ...; pure () }`. This happens when the function body is a bare `primIO` expression rather than a `do` block — the type checker struggles to unify the implicit `HasIO` constraint.
+
+**`weakenErrors` inside `try [handler]`:** Adding `weakenErrors` calls inside a `try [onErrno]` block changes the error type from `[Errno]` to a broader type, causing unification failures. Keep `weakenErrors` calls outside `try` blocks, or restructure so logging happens after the `try` completes.
+
+**C FFI shared libraries:** The Idris2-generated wrapper script sets `LD_LIBRARY_PATH` to `$DIR/amon_app`. Custom `.so` files (like `cstr_write.so`) must be copied to `build/exec/amon_app/` at build time. Use `%foreign "C:sym,libname"` syntax where `libname` is the `.so` filename without the `lib` prefix and `.so` extension.
+
+**`spawnCmd` command construction:** The command built with `unwords task.args` is passed to `sh -c`. When the task path is `sh -c "inner command"`, the inner `sh -c` receives only the first word as its command argument. Quote arguments properly or avoid nested `sh -c` patterns.
 
 ---
 
@@ -59,8 +69,23 @@ To change the worker count, modify `maxWorkers` in `Monitor.Main.run`.
 - `src/Protocol.idr` — shared types: `ProcessTask`, `TaskState`, `Ticket`, `StepResult`
 - `src/Worker.idr` — worker pool for the legacy CLI mode
 - `src/Main.idr` — legacy CLI entry point (worker pool, not TUI)
+- `src/cstr_write.c` — C FFI helper: `cstr_write()` (write string to fd) and `cstr_timestamp()` (formatted timestamp via strftime). Compiled to `cstr_write.so`, copied to `build/exec/amon_app/` at build time.
 - `tasks.json` — task config file, parsed at runtime by both modes
 - `test/playbook.yml` — ansible playbook used as a test task
+
+### Logging Subsystem
+
+When a task in `tasks.json` has a `logFile` field defined, all task output is streamed to that file.
+
+**Format:**
+- Log begins with `[START] YYYY-MM-DD HH:MM:SS`
+- Raw output is written through `tee` (ANSI escape sequences preserved as-is)
+- Log ends with `[END] YYYY-MM-DD HH:MM:SS STATUS` (SUCCESS or FAILED)
+
+**Implementation:**
+- `spawnCmd` in `Monitor.Process` wraps the command through `tee -a logfile` when `logFile` is set
+- On process completion, `pollOne` in `Monitor.Source` calls `writeLogFooter` to append the `[END]` line
+- `writeLogFooter` opens the file in append mode (`O_WRONLY | O_APPEND`), writes the footer, and closes
 
 ### Dependencies (from amon.ipkg)
 
@@ -69,6 +94,10 @@ base, contrib, linear, json, elab-util, ansi, tui, tui-async, posix
 ### Build Artifacts
 
 `build/` is gitignored. Contains compiled executables (`build/exec/`) and TTC files (`build/ttc/`).
+
+### C FFI Helpers
+
+Custom C code lives in `src/cstr_write.c` and is compiled to `cstr_write.so` with `gcc -shared -fPIC`. The `.so` must be placed in `build/exec/amon_app/` for the runtime loader to find it. The `.so` is gitignored via `*.so` in `.gitignore`.
 
 ### Testing with zrun
 
