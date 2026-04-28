@@ -5,7 +5,24 @@ import Data.Maybe
 import Data.List
 
 public export
-data JobDisplayStatus = QUEUED | RUNNING | SUCCESS | FAILED
+data JobDisplayStatus = QUEUED | RUNNING | SUCCESS | FAILED | CANCELLED
+
+public export
+Eq JobDisplayStatus where
+  QUEUED    == QUEUED    = True
+  RUNNING   == RUNNING   = True
+  SUCCESS   == SUCCESS   = True
+  FAILED    == FAILED    = True
+  CANCELLED == CANCELLED = True
+  _         == _         = False
+
+public export
+Show JobDisplayStatus where
+  show QUEUED     = "QUEUED"
+  show RUNNING    = "RUNNING"
+  show SUCCESS    = "SUCCESS"
+  show FAILED     = "FAILED"
+  show CANCELLED  = "CANCELLED"
 
 public export
 toDisplayStatus : TaskState -> JobDisplayStatus
@@ -27,7 +44,15 @@ record JobEntry where
   status : JobDisplayStatus
 
 public export
-data JobUpdate = JobOutput String (List LogLine) | JobFinished String JobDisplayStatus
+data JobUpdate
+  = JobOutput String (List LogLine)
+  | JobFinished String JobDisplayStatus
+  | AllDone Bool
+
+public export
+data CompletionMsg
+  = TaskDone String JobDisplayStatus
+  | WorkerExit
 
 public export
 record JobMonitorState where
@@ -37,6 +62,8 @@ record JobMonitorState where
   jobLogs      : List (List LogLine)
   logOffset    : Nat
   logColOffset : Nat
+  allDone      : Bool
+  hasFailed    : Bool
 
 public export
 indexNat : Nat -> List a -> Maybe a
@@ -54,7 +81,8 @@ getSelectedLogs st = reverse $ fromMaybe [] $ indexNat st.selected st.jobLogs
 
 public export
 initialState : List JobEntry -> JobMonitorState
-initialState jobs = MkJobMonitorState jobs 0 (replicate (length jobs) []) 0 0
+initialState jobs =
+  MkJobMonitorState jobs 0 (replicate (length jobs) []) 0 0 False False
 
 updateAtIdx : Nat -> (a -> a) -> List a -> List a
 updateAtIdx _ _ [] = []
@@ -85,6 +113,29 @@ appendJobLogBatch name lines st =
 public export
 updateJobStatus : String -> JobDisplayStatus -> JobMonitorState -> JobMonitorState
 updateJobStatus name status st =
+  let failed = status == FAILED || status == CANCELLED
+  in case findEntryIdx name st.jobs of
+    Just idx => { jobs := updateAtIdx idx ({ status := status }) st.jobs
+                , hasFailed := st.hasFailed || failed
+                } st
+    Nothing => st
+
+public export
+setAllDone : JobMonitorState -> JobMonitorState
+setAllDone st = { allDone := True } st
+
+public export
+findRunningJobName : JobMonitorState -> Maybe String
+findRunningJobName st =
+  case find (\e => e.status == RUNNING) st.jobs of
+    Just e  => Just e.task.name
+    Nothing => Nothing
+
+public export
+cancelJobByName : String -> JobMonitorState -> JobMonitorState
+cancelJobByName name st =
   case findEntryIdx name st.jobs of
-    Just idx => { jobs := updateAtIdx idx ({ status := status }) st.jobs } st
+    Just idx => { jobs := updateAtIdx idx ({ status := CANCELLED }) st.jobs
+                , hasFailed := True
+                } st
     Nothing => st

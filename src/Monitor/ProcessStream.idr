@@ -16,6 +16,8 @@ import System.Posix.File.ReadRes
 import Data.Vect
 import System.Posix.File.FileDesc
 import IO.Async
+import IO.Async.BQueue
+import IO.Async.Channel
 import IO.Async.Loop.PollH
 import IO.Async.Loop.Posix
 import IO.Async.Posix
@@ -25,6 +27,7 @@ import System.Posix.File
 import System.Posix.File.FileDesc
 import System.Posix.Process
 import System.Posix.Errno
+import System.Posix.Signal
 import System.File
 import FS
 import FS.Concurrent
@@ -67,20 +70,19 @@ prim__fcntl_set : Int -> Int -> Int -> PrimIO Int
 %foreign "C:read,libc"
 prim__sys_read : Int -> Buffer -> Int -> PrimIO Int
 
-||| Record to hold process resources for cleanup.
 public export
 record ProcessResources where
   constructor MkProcessResources
   readFd   : Int
   logFd    : Maybe Int
+  pid      : Int
 
-||| Close a file descriptor (async wrapper).
 closeFdAsync : Int -> Async Poll [] ()
-closeFdAsync fd = liftIO $ do
-  ignore $ primIO $ prim__close fd
-  pure ()
+closeFdAsync fd = liftIO $ ignore $ primIO $ prim__close fd
 
-||| Spawn a child process, return (readFd, pid, maybeLogFd).
+killChild : Int -> Async Poll [Errno] ()
+killChild pid = kill (the PidT $ cast pid) SIGTERM
+
 spawnProcessSetup : ProcessTask -> IO (Maybe (Int, Int, Maybe Int))
 spawnProcessSetup task = do
   let baseCmd = "timeout " ++ show task.timeout ++ "s " ++ task.path
@@ -134,7 +136,6 @@ spawnProcessSetup task = do
               _ <- writeToFd fd header
               pure $ Just fd
 
-||| Split a buffered string into complete lines and remaining buffer.
 splitOutputLocal : String -> String -> (List String, String)
 splitOutputLocal buf chunk = go [] [] (unpack (buf ++ chunk))
   where
@@ -145,15 +146,12 @@ splitOutputLocal buf chunk = go [] [] (unpack (buf ++ chunk))
          then go ((pack (reverse lineBuf)) :: linesAcc) [] cs
          else go linesAcc (c :: lineBuf) cs
 
-||| Convert a single byte to a char.
 bits8ToChar : Bits8 -> Char
 bits8ToChar b = cast b
 
-||| Convert a ByteString to a String (lossy, treats each byte as a char).
 byteStringToString : ByteString -> String
 byteStringToString bs = pack $ map bits8ToChar $ ByteString.unpack bs
 
-||| Emit a single line to log file and TUI event queue.
 covering
 emitLine : Has JobUpdate evts
           => String -> Maybe Int -> EventQueue evts -> String
@@ -166,7 +164,6 @@ emitLine taskName mLogFd queue line = do
   when (length clean > 0) $
     weakenErrors $ putEvent queue $ JobOutput taskName [MkLogLine "" clean]
 
-||| Write log footer for a process.
 writeProcessFooter : Maybe Int -> Int -> Async Poll [Errno] ()
 writeProcessFooter Nothing _ = pure ()
 writeProcessFooter (Just lfd) exitCode = do
@@ -176,7 +173,6 @@ writeProcessFooter (Just lfd) exitCode = do
   ignore $ liftIO $ writeToFd lfd footer
   pure ()
 
-||| Handler for each chunk read from the process output.
 covering
 readChunkAct : Has JobUpdate evts
               => String -> Maybe Int -> EventQueue evts
@@ -190,7 +186,6 @@ readChunkAct taskName mLogFd queue bufRef bs = do
   liftIO $ writeIORef bufRef newBuf
   for_ completeLines $ emitLine taskName mLogFd queue
 
-||| Convert a buffer to ByteString.
 bufToByteString : Buffer -> Int -> IO ByteString
 bufToByteString buf len = do
   Just newBuf <- newBuffer len
@@ -203,7 +198,6 @@ bufToByteString buf len = do
 
 parameters {auto ep : PollH Poll}
 
-  ||| Async poll for a raw fd.
   asyncPollFd : Fd -> PollEvent -> Async Poll [Errno] PollEvent
   asyncPollFd thisFd evt = do
     st <- env
@@ -213,7 +207,6 @@ parameters {auto ep : PollH Poll}
           Right x => Right x
           Left  x => Left (Here x)
 
-  ||| Read one chunk from a raw fd, handling EAGAIN with async poll.
   readOneChunk : Int -> Async Poll [Errno] (Int, ByteString)
   readOneChunk rawFd = do
     let fd = MkFd $ cast rawFd
@@ -235,7 +228,6 @@ parameters {auto ep : PollH Poll}
               pure (n2, bs)
             else pure (n2, ByteString.empty)
 
-  ||| Async read loop for a process output fd.
   covering
   asyncReadLoop : Has JobUpdate evts
                   => Int -> String -> Maybe Int -> EventQueue evts
@@ -249,59 +241,110 @@ parameters {auto ep : PollH Poll}
          readChunkAct taskName mLogFd queue bufRef bs
          asyncReadLoop thisFd taskName mLogFd queue bufRef
 
-  ||| Inner body of processPull after successful spawn.
   covering
-  processPullBody : Has JobUpdate evts
-                    => ProcessTask
-                   -> EventQueue evts
-                   -> Int    -- readFd
-                   -> Int    -- pid
-                   -> Maybe Int  -- logFd
-                   -> AsyncStream Poll [Errno] ()
-  processPullBody task queue readFd pid logFd = assert_total $ do
-    ignore $ exec $ weakenErrors $ putEvent queue $ JobFinished task.name RUNNING
+  runProcess : Has JobUpdate evts
+               => ProcessTask
+              -> EventQueue evts
+              -> Int
+              -> Int
+              -> Maybe Int
+              -> Async Poll [Errno] ()
+  runProcess task queue readFd pid logFd =
+    guarantee
+      (assert_total $ do
+        ignore $ weakenErrors $
+          putEvent queue $ JobFinished task.name RUNNING
 
-    _ <- acquire (pure $ MkProcessResources readFd logFd)
-            $ \(MkProcessResources rfd mlogFd) => do
-                weakenErrors $ closeFdAsync rfd
-                case mlogFd of
-                  Just lfd => weakenErrors $ closeFdAsync lfd
-                  Nothing  => pure ()
+        bufRef <- liftIO $ newIORef ""
 
-    bufRef <- exec $ liftIO $ newIORef ""
+        asyncReadLoop readFd task.name logFd queue bufRef
 
-    exec $ asyncReadLoop readFd task.name logFd queue bufRef
+        remaining <- liftIO $ readIORef bufRef
+        when (length remaining > 0) $
+          emitLine task.name logFd queue remaining
 
-    -- Process any remaining buffered data.
-    remaining <- exec $ liftIO $ readIORef bufRef
-    when (length remaining > 0) $
-      exec $ emitLine task.name logFd queue remaining
+        (_, status) <- waitpid (the PidT $ cast pid) WNOHANG
+        let exitCode : Int
+            exitCode = case status of
+                           Exited code => cast code
+                           _           => 127
+        let jobStatus = if exitCode == 0 then SUCCESS else FAILED
 
-    (_, status) <- waitpid (the PidT $ cast pid) WNOHANG
-    let exitCode : Int
-        exitCode = case status of
-                       Exited code => cast code
-                       _           => 127
-    let jobStatus = if exitCode == 0 then SUCCESS else FAILED
+        writeProcessFooter logFd exitCode
+        ignore $ weakenErrors $
+          putEvent queue $ JobFinished task.name jobStatus)
+      (do
+        weakenErrors $ closeFdAsync readFd
+        case logFd of
+          Just lfd => weakenErrors $ closeFdAsync lfd
+          Nothing  => pure ())
 
-    exec $ writeProcessFooter logFd exitCode
-    ignore $ exec $ weakenErrors $ putEvent queue $ JobFinished task.name jobStatus
-
-  ||| Per-process Pull: spawns, streams output, emits events, cleans up.
   covering
   processPull : Has JobUpdate evts
                 => ProcessTask
                 -> EventQueue evts
-                -> AsyncStream Poll [Errno] ()
+                -> Async Poll [Errno] ()
   processPull task queue = assert_total $ do
-    maybeRes <- exec $ liftIO $ spawnProcessSetup task
+    maybeRes <- liftIO $ spawnProcessSetup task
     case maybeRes of
       Nothing => pure ()
       Just (readFd, pid, logFd) =>
-        processPullBody task queue readFd pid logFd
+        onCancel
+          (runProcess task queue readFd pid logFd)
+          (do
+            closeFdAsync readFd
+            dropErrs $ killChild pid
+            dropErrs $ writeProcessFooter logFd 1
+            ignore $ putEvent queue $ JobFinished task.name CANCELLED)
 
-  ||| Build an outer stream of per-process streams, run with parJoin.
-  export
+  covering
+  workerLoop : Has JobUpdate evts
+               => BQueue (Maybe ProcessTask)
+               -> Channel CompletionMsg
+               -> EventQueue evts
+               -> Async Poll [Errno] ()
+  workerLoop jobQueue doneQueue evtQueue = do
+    mTask <- dequeue jobQueue
+    case mTask of
+      Nothing => do
+        ignore $ weakenErrors $ send doneQueue WorkerExit
+        pure ()
+      Just task => do
+        processPull task evtQueue
+        workerLoop jobQueue doneQueue evtQueue
+
+  covering
+  schedulerLoop : (maxWorkers : Nat)
+                  -> List ProcessTask
+                  -> BQueue (Maybe ProcessTask)
+                  -> Async Poll [Errno] ()
+  schedulerLoop mw [] q = do
+    traverse_ (\_ => enqueue q Nothing)
+              (the (List ()) $ List.replicate mw ())
+    pure ()
+  schedulerLoop mw (t :: ts) q = do
+    enqueue q (Just t)
+    schedulerLoop mw ts q
+
+  covering
+  completionTracker : Has JobUpdate evts
+                     => (workersLeft : Nat)
+                     -> Channel CompletionMsg
+                     -> EventQueue evts
+                     -> Async Poll [Errno] ()
+  completionTracker 0 _ _ = pure ()
+  completionTracker (S k) doneQueue evtQueue = do
+    msg <- receive doneQueue
+    case msg of
+      Just WorkerExit =>
+        if k == 0
+          then ignore $ weakenErrors $ putEvent evtQueue $ AllDone False
+          else completionTracker k doneQueue evtQueue
+      Just (TaskDone _ _) =>
+        completionTracker (S k) doneQueue evtQueue
+      Nothing => pure ()
+
+  export covering
   runAllTasks : Has JobUpdate evts
                 => (maxWorkers : Nat)
                 -> {auto 0 prf : IsSucc maxWorkers}
@@ -309,7 +352,19 @@ parameters {auto ep : PollH Poll}
                 -> EventQueue evts
                 -> Pull (Async Poll) Void [Errno] ()
   runAllTasks maxWorkers tasks queue =
-    drain $ parJoin maxWorkers outer
+    exec runWorkers
     where
-      outer : AsyncStream Poll [Errno] (AsyncStream Poll [Errno] ())
-      outer = emits $ map (\t => processPull t queue) tasks
+      numWorkers : Nat
+      numWorkers = case maxWorkers of
+                       S k => S k
+                       Z   => 1
+
+      covering
+      runWorkers : Async Poll [Errno] ()
+      runWorkers = do
+        jobQueue <- bqueue (length tasks + numWorkers + 1)
+        doneQueue <- channelOf CompletionMsg numWorkers
+        _ <- start $ schedulerLoop numWorkers tasks jobQueue
+        traverse_ (\_ => start $ workerLoop jobQueue doneQueue queue)
+                  (the (List ()) $ List.replicate numWorkers ())
+        completionTracker numWorkers doneQueue queue

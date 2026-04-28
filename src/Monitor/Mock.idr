@@ -57,7 +57,8 @@ runningLogs name = [
 public export
 loadMockLogs : JobEntry -> IO (List LogLine)
 loadMockLogs entry = pure $ case entry.status of
-  SUCCESS => successLogs entry.task.name
-  FAILED  => failedLogs entry.task.name
-  RUNNING => runningLogs entry.task.name
-  QUEUED  => []
+  SUCCESS   => successLogs entry.task.name
+  FAILED    => failedLogs entry.task.name
+  RUNNING   => runningLogs entry.task.name
+  QUEUED    => []
+  CANCELLED => [MkLogLine "stdout>" "Cancelled"]

@@ -12,6 +12,8 @@ onJobUpdate (JobOutput name lines) st =
   update $ appendJobLogBatch name lines st
 onJobUpdate (JobFinished name status) st =
   update $ updateJobStatus name status st
+onJobUpdate (AllDone _) st =
+  update $ setAllDone st
 
 public export
 covering
@@ -43,6 +45,10 @@ onKey (Alpha 'h') st =
                     0   => 0
                     S n => n `minus` 4
   in update $ { logColOffset := newOffset } st
+onKey (Alpha 'x') st =
+  case findRunningJobName st of
+    Just name => update $ cancelJobByName name st
+    Nothing   => ignore
 onKey (Alpha 'q') _ = exit
 onKey Escape      _ = exit
 onKey _           st = ignore

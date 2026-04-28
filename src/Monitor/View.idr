@@ -18,6 +18,8 @@ View JobDisplayStatus where
     showTextAt window.nw "[+]"
   paint _ window FAILED = do
     showTextAt window.nw "[x]"
+  paint _ window CANCELLED = do
+    showTextAt window.nw "[X]"
 
 View JobEntry where
   size entry = MkArea (4 + length entry.task.name) 1
@@ -76,6 +78,19 @@ View JobMonitorState where
     body <- packTop Normal body HRule
     let (content, legendArea) = body.splitBottom 2
     legendArea <- packTop Normal legendArea HRule
+    let (legendText, statusArea) = legendArea.splitLeft 40
+    showTextAt legendText.nw
+      "\x2191\x2193:jobs  j/k:vscroll  h/l:hscroll  x:cancel  q:quit"
+    case (st.allDone, st.hasFailed) of
+      (True, False) => do
+        sgr [SetForeground Green]
+        showTextAt statusArea.nw "ALL JOBS DONE"
+        sgr [Reset]
+      (True, True) => do
+        sgr [SetForeground Yellow]
+        showTextAt statusArea.nw "ALL JOBS DONE"
+        sgr [Reset]
+      _ => pure ()
     let leftWidth = max 10 (integerToNat (natToInteger content.width * 3 `div` 10))
     let (left, mid) = content.splitLeft leftWidth
     let (sep, right) = mid.splitLeft 1
@@ -89,5 +104,4 @@ View JobMonitorState where
       [] => do
         showTextAt right.nw "No log output"
       _  => paintLogLines right st.logColOffset (drop (autoScrollOffset right.height st.logOffset logs) logs)
-    showTextAt legendArea.nw "↑↓:jobs  j/k:vscroll  h/l:hscroll  q:quit"
     sgr [Reset]

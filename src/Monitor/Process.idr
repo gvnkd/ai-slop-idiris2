@@ -84,10 +84,11 @@ writeLogFooter : String -> JobDisplayStatus -> IO ()
 writeLogFooter logPath status = do
   ts <- getCurrentTimeStr
   let statusStr := case status of
-                      SUCCESS => "SUCCESS"
-                      FAILED  => "FAILED"
-                      QUEUED  => "QUEUED"
-                      RUNNING => "RUNNING"
+                      SUCCESS   => "SUCCESS"
+                      FAILED    => "FAILED"
+                      QUEUED    => "QUEUED"
+                      RUNNING   => "RUNNING"
+                      CANCELLED => "CANCELLED"
   let footer := "[END] " ++ ts ++ " " ++ statusStr ++ "\n"
   _ <- writeToFdAppend logPath footer
   pure ()
