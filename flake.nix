@@ -118,9 +118,13 @@
 
       in {
         devShells.default = pkgs.mkShell rec {
-          nativeBuildInputs = [ idris2 ];
+          nativeBuildInputs = [ idris2 ] ++ (with pkgs; [
+            #opencode
+            python3
+            ansible
+            jq
+          ]);
           buildInputs = [
-            pkgs.python3
             tui
             tui-async
             elab-util

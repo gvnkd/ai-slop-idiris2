@@ -1,18 +1,18 @@
 [
   {
-    "name": "List Root Directory",
-    "path": "ls",
-    "args": ["-la", "./"],
-    "timeout": 2,
-    "logFile": "logs/root_dir.log",
-    "blockingIO": false
+    "name": "Ansible",
+    "path": "ansible-playbook",
+    "args": ["test/playbook.yml"],
+    "timeout": 20,
+    "logFile": "logs/ansible.log",
+    "blockingIO": true
   },
   {
     "name": "Quick Sleep",
     "path": "sleep",
     "args": ["0.5"],
     "timeout": 1,
-    "logFile": "logs/timeout_error.log",
+    "logFile": "logs/quick_sleep.log",
     "blockingIO": false
   },
   {
@@ -25,8 +25,8 @@
   },
   {
     "name": "Watch",
-    "path": "cat",
-    "args": ["/dev/urandom", "|", "xxd"],
+    "path": "./watch.sh",
+    "args": [ ],
     "timeout": 30,
     "logFile": null,
     "blockingIO": false
@@ -36,23 +36,15 @@
     "path": "sleep",
     "args": ["5"],
     "timeout": 1,
-    "logFile": null,
+    "logFile": "logs/timeout.log",
     "blockingIO": false
-  },
-  {
-    "name": "ansible",
-    "path": "ansible-playbook",
-    "args": ["test/playbook.yml"],
-    "timeout": 300,
-    "logFile": null,
-    "blockingIO": true
   },
   {
     "name": "Missing Binary Test",
     "path": "/usr/bin/not-exist",
     "args": [],
     "timeout": 5,
-    "logFile": null,
+    "logFile": "logs/missing.log",
     "blockingIO": false
   }
 ]
