@@ -16,8 +16,6 @@ import System.Posix.File.ReadRes
 import Data.Vect
 import System.Posix.File.FileDesc
 import IO.Async
-import IO.Async.BQueue
-import IO.Async.Channel
 import IO.Async.Loop.PollH
 import IO.Async.Loop.Posix
 import IO.Async.Posix
@@ -80,9 +78,19 @@ record ProcessResources where
 closeFdAsync : Int -> Async Poll [] ()
 closeFdAsync fd = liftIO $ ignore $ primIO $ prim__close fd
 
+%default total
+
 killChild : Int -> Async Poll [Errno] ()
 killChild pid = kill (the PidT $ cast pid) SIGTERM
 
+covering
+closeFdsFrom : Int -> IO ()
+closeFdsFrom n =
+  when (n < 1024) $ do
+    ignore $ primIO $ prim__close n
+    closeFdsFrom (n + 1)
+
+covering
 spawnProcessSetup : ProcessTask -> IO (Maybe (Int, Int, Maybe Int))
 spawnProcessSetup task = do
   let baseCmd = "timeout " ++ show task.timeout ++ "s " ++ task.path
@@ -107,6 +115,7 @@ spawnProcessSetup task = do
           _ <- primIO $ prim__dup2 writeFd 1
           _ <- primIO $ prim__dup2 writeFd 2
           _ <- primIO $ prim__close writeFd
+          closeFdsFrom 3
           let blk = fromMaybe True task.blockingIO
           when blk $ do
             devnull <- primIO $ prim__open "/dev/null" 0
@@ -289,60 +298,16 @@ parameters {auto ep : PollH Poll}
     case maybeRes of
       Nothing => pure ()
       Just (readFd, pid, logFd) =>
-        onCancel
-          (runProcess task queue readFd pid logFd)
-          (do
-            closeFdAsync readFd
-            dropErrs $ killChild pid
-            dropErrs $ writeProcessFooter logFd 1
-            ignore $ putEvent queue $ JobFinished task.name CANCELLED)
+        runProcess task queue readFd pid logFd
 
   covering
-  workerLoop : Has JobUpdate evts
-               => BQueue (Maybe ProcessTask)
-               -> Channel CompletionMsg
-               -> EventQueue evts
-               -> Async Poll [Errno] ()
-  workerLoop jobQueue doneQueue evtQueue = do
-    mTask <- dequeue jobQueue
-    case mTask of
-      Nothing => do
-        ignore $ weakenErrors $ send doneQueue WorkerExit
-        pure ()
-      Just task => do
-        processPull task evtQueue
-        workerLoop jobQueue doneQueue evtQueue
-
-  covering
-  schedulerLoop : (maxWorkers : Nat)
-                  -> List ProcessTask
-                  -> BQueue (Maybe ProcessTask)
-                  -> Async Poll [Errno] ()
-  schedulerLoop mw [] q = do
-    traverse_ (\_ => enqueue q Nothing)
-              (the (List ()) $ List.replicate mw ())
-    pure ()
-  schedulerLoop mw (t :: ts) q = do
-    enqueue q (Just t)
-    schedulerLoop mw ts q
-
-  covering
-  completionTracker : Has JobUpdate evts
-                     => (workersLeft : Nat)
-                     -> Channel CompletionMsg
-                     -> EventQueue evts
-                     -> Async Poll [Errno] ()
-  completionTracker 0 _ _ = pure ()
-  completionTracker (S k) doneQueue evtQueue = do
-    msg <- receive doneQueue
-    case msg of
-      Just WorkerExit =>
-        if k == 0
-          then ignore $ weakenErrors $ putEvent evtQueue $ AllDone False
-          else completionTracker k doneQueue evtQueue
-      Just (TaskDone _ _) =>
-        completionTracker (S k) doneQueue evtQueue
-      Nothing => pure ()
+  completionStream : Has JobUpdate evts
+                     => EventQueue evts
+                     -> AsyncStream Poll [Errno] ()
+  completionStream evtQueue = assert_total $ do
+    sleep 30.s
+    ignore $ exec $ weakenErrors $
+      putEvent evtQueue $ AllDone False
 
   export covering
   runAllTasks : Has JobUpdate evts
@@ -352,19 +317,8 @@ parameters {auto ep : PollH Poll}
                 -> EventQueue evts
                 -> Pull (Async Poll) Void [Errno] ()
   runAllTasks maxWorkers tasks queue =
-    exec runWorkers
+    drain $ parJoin maxWorkers outer
     where
-      numWorkers : Nat
-      numWorkers = case maxWorkers of
-                       S k => S k
-                       Z   => 1
-
-      covering
-      runWorkers : Async Poll [Errno] ()
-      runWorkers = do
-        jobQueue <- bqueue (length tasks + numWorkers + 1)
-        doneQueue <- channelOf CompletionMsg numWorkers
-        _ <- start $ schedulerLoop numWorkers tasks jobQueue
-        traverse_ (\_ => start $ workerLoop jobQueue doneQueue queue)
-                  (the (List ()) $ List.replicate numWorkers ())
-        completionTracker numWorkers doneQueue queue
+      outer : AsyncStream Poll [Errno] (AsyncStream Poll [Errno] ())
+      outer = emits $ map (\t => exec $ processPull t queue) tasks
+              ++ [completionStream queue]
