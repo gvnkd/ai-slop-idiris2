@@ -16,11 +16,6 @@ import FS.Pull
 
 import public Monitor.Process
 
-emitLines : Has JobUpdate evts => String -> List String -> EventQueue evts -> NoExcept ()
-emitLines name lines queue =
-  let logLines = map (MkLogLine "out>") $ filter (\l => length l > 0) lines
-  in when (not $ null logLines) $ putEvent queue $ JobOutput name logLines
-
 public export
 covering
 resultsSource : Has JobUpdate evts
