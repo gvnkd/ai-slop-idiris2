@@ -35,8 +35,8 @@ import Data.ByteVect
 
 %default total
 
-%foreign "C:pipe,libc"
-prim__pipe : AnyPtr -> PrimIO CInt
+%foreign "C:pipe2,libc"
+prim__pipe2 : AnyPtr -> Int -> PrimIO CInt
 
 %foreign "C:close,libc"
 prim__close : Int -> PrimIO Int
@@ -96,7 +96,7 @@ spawnProcessSetup task = do
   let baseCmd = "timeout " ++ show task.timeout ++ "s " ++ task.path
                 ++ " " ++ unwords task.args
   pipeArr <- malloc Fd 2
-  rc <- primIO $ prim__pipe (unsafeUnwrap pipeArr)
+  rc <- primIO $ prim__pipe2 (unsafeUnwrap pipeArr) 524288
   if rc < 0
     then do free pipeArr; pure Nothing
     else do

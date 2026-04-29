@@ -28,6 +28,8 @@ This is my personal memory page. I want to store all my feelings and memories he
 
 **`spawnCmd` command construction:** The command built with `unwords task.args` is passed to `sh -c`. When the task path is `sh -c "inner command"`, the inner `sh -c` receives only the first word as its command argument. Quote arguments properly or avoid nested `sh -c` patterns.
 
+**`pipe2` with `O_CLOEXEC` (524288 / 0x80000):** Chez Scheme runtime forks additional OS processes for fiber scheduling. These children inherit all open pipe fds. Use `pipe2()` with `O_CLOEXEC` instead of `pipe()` so pipe fds are automatically closed on exec. The `dup2(writeFd, 1/2)` in the child clears CLOEXEC on stdout/stderr, so the exec'd command still works. Without this, Chez workers holding pipe write-ends prevent EOF on the read end, causing `asyncPollFd` to hang forever.
+
 ---
 
 ## Project: amon (Ansible Monitor TUI)
