@@ -1,0 +1,12 @@
+ui {
+  session_serialization false
+  show_startup_tips false
+  pane_frames false    // Hides the borders around terminal panes for a cleaner look
+  simplified_ui true   // Uses a simplified UI without special fonts/glyphs
+}
+
+layout {
+    pane name="amon" size=48 {
+        cwd "/srv/ai-slop-idris2"
+    }
+}
