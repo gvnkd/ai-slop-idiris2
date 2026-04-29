@@ -60,6 +60,12 @@ session_exists() {
   zellij list-sessions --no-formatting 2>/dev/null | grep "^${SESSION} " | grep -qv "EXITED"
 }
 
+require_session() {
+  if ! session_exists; then
+    die "Session '$SESSION' not found. Start it with: $0"
+  fi
+}
+
 # Find the pane running amon, or return the first terminal pane
 get_pane_id() {
   local result
@@ -235,13 +241,12 @@ cmd_rebuild() {
 }
 
 cmd_attach() {
-  if ! session_exists; then
-    die "Session '$SESSION' not found. Start it with: $0"
-  fi
+  require_session
   zj attach "$SESSION"
 }
 
 cmd_screen() {
+  require_session
   local pane_id="${1:-}"
   if [[ -z "$pane_id" ]]; then
     pane_id=$(wait_for_pane 20)
@@ -250,6 +255,7 @@ cmd_screen() {
 }
 
 cmd_screen_file() {
+  require_session
   local pane_id="${1:-}"
   local path="${2:-/dev/stdout}"
   if [[ -z "$pane_id" ]]; then
@@ -259,6 +265,7 @@ cmd_screen_file() {
 }
 
 cmd_send_keys() {
+  require_session
   if [[ $# -lt 1 ]]; then
     die "Usage: $0 --send-keys KEY [KEY...]"
   fi
@@ -276,6 +283,7 @@ cmd_send_keys() {
 }
 
 cmd_write_chars() {
+  require_session
   if [[ $# -lt 1 ]]; then
     die "Usage: $0 --write-chars TEXT"
   fi
@@ -288,6 +296,7 @@ cmd_write_chars() {
 }
 
 cmd_subscribe() {
+  require_session
   local pane_id
   pane_id=$(wait_for_pane 20)
   info "Streaming viewport of pane $pane_id (Ctrl-C to stop)..."
