@@ -5,6 +5,7 @@ import TUI.Painting
 import TUI.Geometry
 import TUI.Layout
 import Monitor.Types
+import Monitor.Process
 import Protocol
 import Data.List
 
@@ -73,12 +74,9 @@ paintLogLines window colOffset (line :: rest) =
   if window.height == 0
     then pure ()
     else do
-      let prefW = length line.stream + 1
-      let maxW = minus window.width prefW
-      let chars = drop colOffset (unpack line.text)
-      let trimmed = MkLogLine line.stream (pack (take maxW chars))
-      remaining <- packTop Normal window trimmed
-      paintLogLines remaining colOffset rest
+      let (top, bottom) = window.splitTop 1
+      showTextAt top.nw $ truncateAnsi window.width line.text
+      paintLogLines bottom colOffset rest
 
 autoScrollOffset : Nat -> Nat -> List LogLine -> Nat
 autoScrollOffset viewH scrollUp logs = minus (length logs) viewH `minus` scrollUp

@@ -95,6 +95,8 @@ spawnProcessSetup : ProcessTask -> IO (Maybe (Int, Int, Maybe Int))
 spawnProcessSetup task = do
   let baseCmd = "timeout " ++ show task.timeout ++ "s " ++ task.path
                 ++ " " ++ unwords task.args
+  let envPrefix = concat $ map (\(k,v) => k ++ "=" ++ v ++ " ") task.envVars
+  let fullCmd = if envPrefix == "" then baseCmd else envPrefix ++ baseCmd
   pipeArr <- malloc Fd 2
   rc <- primIO $ prim__pipe2 (unsafeUnwrap pipeArr) 524288
   if rc < 0
@@ -122,7 +124,7 @@ spawnProcessSetup task = do
             _ <- primIO $ prim__dup2 devnull 0
             _ <- primIO $ prim__close devnull
             pure ()
-          argsArr <- fromList [Just "sh", Just "-c", Just baseCmd, Nothing]
+          argsArr <- fromList [Just "sh", Just "-c", Just fullCmd, Nothing]
           _ <- primIO $ prim__execvp "/bin/sh" (unsafeUnwrap argsArr)
           free argsArr
           primIO $ prim__exit 127
@@ -163,9 +165,8 @@ emitLine taskName mLogFd queue line = do
   case mLogFd of
     Just lfd => ignore $ liftIO $ writeToFd lfd (line ++ "\n")
     Nothing  => pure ()
-  let clean = stripAnsi line
-  when (length clean > 0) $
-    weakenErrors $ putEvent queue $ JobOutput taskName [MkLogLine "" clean]
+  when (length line > 0) $
+    weakenErrors $ putEvent queue $ JobOutput taskName [MkLogLine "" line]
 
 writeProcessFooter : Maybe Int -> Int -> Async Poll [Errno] ()
 writeProcessFooter Nothing _ = pure ()

@@ -8,6 +8,7 @@ import TUI.Key
 import IO.Async.Loop.Posix
 import IO.Async.Loop.Epoll
 import System
+import Data.String
 import Data.List
 import Data.Maybe
 import Monitor.Types
@@ -24,13 +25,19 @@ run = do
   mThreads <- getEnv "IDRIS2_ASYNC_THREADS"
   when (isNothing mThreads) $
     ignore $ setEnv "IDRIS2_ASYNC_THREADS" "1" False
+  args <- getArgs
+  let maxWorkers : Nat
+      maxWorkers = case args of
+                        (_ :: n :: _) =>
+                          let k = stringToNatOrZ n
+                          in if k == 0 then 2 else k
+                        _ => 2
   Just tasks <- loadTasks "tasks.json"
     | Nothing => die "Failed to load tasks.json"
-  let maxWorkers = 3
   let entries = toJobEntries tasks
   let initState = initialState entries
   let mainLoop = asyncMain {evts = [JobUpdate, Key]}
-                    [resultsSource 3 tasks]
+                    [resultsSource (S (maxWorkers `minus` 1)) tasks]
   Prelude.ignore $ runView mainLoop handler initState
 
 covering

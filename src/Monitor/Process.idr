@@ -242,3 +242,30 @@ mutual
 export
 stripAnsi : String -> String
 stripAnsi s = pack $ stripGo 1 1 (unpack s)
+
+mutual
+  truncGo : Nat -> Nat -> List Char -> List Char
+  truncGo _ _ [] = []
+  truncGo 0 _ cs = takeTrailingSgr cs
+  truncGo budget col ('\x1b' :: '[' :: cs) = '\x1b' :: '[' :: keepSgr budget col cs
+  truncGo budget col ('\x1b' :: c :: cs)   = '\x1b' :: c :: truncGo budget col cs
+  truncGo budget col (c :: cs)             = c :: truncGo (minus budget 1) (col + 1) cs
+
+  keepSgr : Nat -> Nat -> List Char -> List Char
+  keepSgr budget col cs =
+    let (params, rest) = span (not . isFinal) cs
+    in case rest of
+         (final :: after) => params ++ (final :: truncGo budget col after)
+         []               => params
+
+  takeTrailingSgr : List Char -> List Char
+  takeTrailingSgr ('\x1b' :: '[' :: cs) =
+    let (params, rest) = span (not . isFinal) cs
+    in case rest of
+         (final :: after) => '\x1b' :: '[' :: params ++ (final :: takeTrailingSgr after)
+         []               => []
+  takeTrailingSgr _ = []
+
+export
+truncateAnsi : Nat -> String -> String
+truncateAnsi maxW s = pack $ truncGo maxW 1 (unpack s)

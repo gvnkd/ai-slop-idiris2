@@ -3,18 +3,23 @@ module Protocol
 import Language.JSON
 import Language.Reflection
 import JSON.Derive
+import Data.SortedMap
 
 %language ElabReflection
 
 public export
 record ProcessTask where
   constructor MKProcessTask
-  name       : String       -- Краткое имя для логов
-  path       : String       -- Полный путь к бинарнику
-  args       : List String  -- Список аргументов
-  timeout    : Int          -- Тайм-аут в секундах
+  name       : String
+  path       : String
+  args       : List String
+  timeout    : Int
   logFile    : Maybe String
   blockingIO : Maybe Bool
+  envVars    : List (String, String)
+
+parseEnvVars : SortedMap String String -> List (String, String)
+parseEnvVars = SortedMap.toList
 
 export
 FromJSON ProcessTask where
@@ -24,7 +29,8 @@ FromJSON ProcessTask where
                      (field      o "args")
                      (field      o "timeout")
                      (field      o "logFile")
-                     (fieldMaybe o "blockingIO") |]
+                     (fieldMaybe o "blockingIO")
+                     (map parseEnvVars $ fieldWithDeflt o (the (SortedMap String String) SortedMap.empty) "envVars") |]
 
 public export
 data TaskState = Ready | InProgress | Done | Failed
