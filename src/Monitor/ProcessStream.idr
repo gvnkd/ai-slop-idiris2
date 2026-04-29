@@ -155,12 +155,6 @@ splitOutputLocal buf chunk = go [] [] (unpack (buf ++ chunk))
          then go ((pack (reverse lineBuf)) :: linesAcc) [] cs
          else go linesAcc (c :: lineBuf) cs
 
-bits8ToChar : Bits8 -> Char
-bits8ToChar b = cast b
-
-byteStringToString : ByteString -> String
-byteStringToString bs = pack $ map bits8ToChar $ ByteString.unpack bs
-
 covering
 emitLine : Has JobUpdate evts
           => String -> Maybe Int -> EventQueue evts -> String
@@ -177,7 +171,10 @@ writeProcessFooter : Maybe Int -> Int -> Async Poll [Errno] ()
 writeProcessFooter Nothing _ = pure ()
 writeProcessFooter (Just lfd) exitCode = do
   ts <- liftIO getCurrentTimeStr
-  let statusStr = if exitCode == 0 then "SUCCESS" else "FAILED"
+  let statusStr = case exitCode of
+                       0   => "SUCCESS"
+                       124 => "TIMEDOUT"
+                       _   => "FAILED"
   let footer = "[END] " ++ ts ++ " " ++ statusStr ++ "\n"
   ignore $ liftIO $ writeToFd lfd footer
   pure ()
@@ -189,7 +186,7 @@ readChunkAct : Has JobUpdate evts
               -> ByteString -> Async Poll [Errno] ()
 readChunkAct _ _ _ _ (BS 0 _) = pure ()
 readChunkAct taskName mLogFd queue bufRef bs = do
-  let chunk := byteStringToString bs
+  let chunk := toString bs
   oldBuf <- liftIO $ readIORef bufRef
   let (completeLines, newBuf) = splitOutputLocal oldBuf chunk
   liftIO $ writeIORef bufRef newBuf
@@ -263,24 +260,20 @@ parameters {auto ep : PollH Poll}
       (assert_total $ do
          ignore $ weakenErrors $
            putEvent queue $ JobStarted task.name pid
-
          bufRef <- liftIO $ newIORef ""
-
          asyncReadLoop readFd task.name logFd queue bufRef
-
          remaining <- liftIO $ readIORef bufRef
          when (length remaining > 0) $
            emitLine task.name logFd queue remaining
-
-         (reaped, status) <- waitpid (the PidT $ cast pid) WNOHANG
+         (reaped, status) <- waitpid (the PidT $ cast pid) neutral
          let exitCode : Int
-             exitCode = if reaped == 0
-                           then 1
-                           else case status of
-                                    Exited code => cast code
-                                    _           => 127
-         let jobStatus = if exitCode == 0 then SUCCESS else FAILED
-
+             exitCode = case status of
+                             Exited code => cast code
+                             _           => 127
+         let jobStatus = case exitCode of
+                              0   => SUCCESS
+                              124 => TIMEDOUT
+                              _   => FAILED
          writeProcessFooter logFd exitCode
          ignore $ weakenErrors $
            putEvent queue $ JobFinished task.name jobStatus)

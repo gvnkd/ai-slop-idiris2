@@ -86,6 +86,7 @@ writeLogFooter logPath status = do
   let statusStr := case status of
                       SUCCESS   => "SUCCESS"
                       FAILED    => "FAILED"
+                      TIMEDOUT  => "TIMEDOUT"
                       QUEUED    => "QUEUED"
                       RUNNING   => "RUNNING"
                       CANCELLED => "CANCELLED"

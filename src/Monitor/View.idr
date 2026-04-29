@@ -9,22 +9,36 @@ import Protocol
 import Data.List
 
 View JobDisplayStatus where
-  size _ = MkArea 3 1
+  size _ = MkArea 2 1
   paint _ window QUEUED = do
-    showTextAt window.nw "[Q]"
+    sgr [SetForeground Yellow]
+    showTextAt window.nw "⏳"
+    sgr [Reset]
   paint _ window RUNNING = do
-    showTextAt window.nw "[R]"
+    sgr [SetForeground Cyan]
+    showTextAt window.nw "⏵"
+    sgr [Reset]
   paint _ window SUCCESS = do
-    showTextAt window.nw "[+]"
+    sgr [SetForeground Green]
+    showTextAt window.nw "✔"
+    sgr [Reset]
   paint _ window FAILED = do
-    showTextAt window.nw "[x]"
+    sgr [SetForeground Red]
+    showTextAt window.nw "✘"
+    sgr [Reset]
+  paint _ window TIMEDOUT = do
+    sgr [SetForeground Yellow]
+    showTextAt window.nw "⏱"
+    sgr [Reset]
   paint _ window CANCELLED = do
-    showTextAt window.nw "[X]"
+    sgr [SetForeground BrightRed]
+    showTextAt window.nw "⛔"
+    sgr [Reset]
 
 View JobEntry where
   size entry = MkArea (4 + length entry.task.name) 1
   paint state window entry = do
-    let (badgeRect, rest) = window.splitLeft 3
+    let (badgeRect, rest) = window.splitLeft 2
     paint Normal badgeRect entry.status
     let sel = case state of
                Focused => " > "

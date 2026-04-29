@@ -28,7 +28,7 @@
     "path": "./watch.sh",
     "args": [ ],
     "timeout": 30,
-    "logFile": null,
+    "logFile": "logs/watch.log",
     "blockingIO": false
   },
   {
