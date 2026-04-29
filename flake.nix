@@ -116,6 +116,50 @@
           deps = [ hashable async-posix linux ansi elab-util json parser bytestring algebra array ref1 ilex-core ilex-json ilex refined quantifiers-extra tui posix cptr elin finite async containers async-epoll ]; 
         };
 
+        idrisDeps = [
+          tui
+          tui-async
+          elab-util
+          json
+          parser
+          bytestring
+          algebra
+          array
+          ref1
+          ilex-core
+          ilex-json
+          ilex
+          refined
+          ansi
+          quantifiers-extra
+          posix linux cptr async async-epoll async-posix containers elin finite
+          hashable
+          streams
+          streams-posix
+          filepath
+        ];
+
+        amonLib = pkgs.stdenv.mkDerivation {
+          pname = "amon-lib";
+          version = "0.1.0";
+          src = ./.;
+          nativeBuildInputs = [ idris2 pkgs.gcc ];
+          IDRIS2_PACKAGE_PATH = pkgs.lib.makeSearchPath "idris2-${ver}" idrisDeps;
+          IDRIS2_LIBS = "${idris2}/lib";
+          IDRIS2_DATA = "${idris2}/share/idris2-${ver}";
+
+          buildPhase = ''
+            idris2 --build amon.ipkg
+            gcc -shared -fPIC -o cstr_write.so src/cstr_write.c
+          '';
+
+          installPhase = ''
+            mkdir -p $out/lib/amon_app
+            cp -r build/exec/amon_app/* $out/lib/amon_app/
+            cp cstr_write.so $out/lib/amon_app/
+          '';
+        };
+
       in {
         devShells.default = pkgs.mkShell rec {
           nativeBuildInputs = [ idris2 ] ++ (with pkgs; [
@@ -124,45 +168,33 @@
             ansible
             jq
           ]);
-          buildInputs = [
-            tui
-            tui-async
-            elab-util
-            json
-            parser
-            bytestring
-            algebra
-            array
-            ref1
-            ilex-core
-            ilex-json
-            ilex
-            refined
-            ansi
-            quantifiers-extra
-            posix linux cptr async async-epoll async-posix containers elin finite
-            hashable
-            streams
-            streams-posix
-            filepath
-          ];
+          buildInputs = idrisDeps;
           shellHook = ''
-            export IDRIS2_PACKAGE_PATH="${pkgs.lib.makeSearchPath "idris2-${ver}" buildInputs }"
-            export LD_LIBRARY_PATH="${pkgs.lib.makeSearchPath "lib" buildInputs }"
+            export IDRIS2_PACKAGE_PATH="${pkgs.lib.makeSearchPath "idris2-${ver}" idrisDeps }"
+            export LD_LIBRARY_PATH="${pkgs.lib.makeSearchPath "lib" idrisDeps }"
             export IDRIS2_LIBS="${idris2}/lib"
             export IDRIS2_DATA="${idris2}/share/idris2-${ver}"
             echo "idris2 --build ansible_mon.ipkg"
           '';
         };
 
-        packages.default = pkgs.stdenv.mkDerivation {
-          pname = "ansible-mon";
-          src = ./.;
-          nativeBuildInputs = [ idris2 ];
-          IDRIS2_PACKAGE_PATH = pkgs.lib.makeSearchPath "lib" [ ansi elab-util tui ];
+        packages.default = let
+          runtimeLibs = [ posix cptr tui linux ];
+        in pkgs.writeShellScriptBin "amon" ''
+          export LD_LIBRARY_PATH="${amonLib}/lib/amon_app:${pkgs.lib.makeSearchPath "lib" runtimeLibs}"
+          exec "${idris2.chez}/bin/scheme" --program "${amonLib}/lib/amon_app/amon.so" "$@"
+        '';
 
-          buildPhase = "idris2 --build ansible_mon.ipkg";
-          installPhase = "mkdir -p $out/bin && cp build/exec/mon $out/bin/ansible-mon";
+        packages.fhs = let
+          runtimeLibs = [ posix cptr tui linux ];
+        in pkgs.buildFHSEnv {
+          name = "amon";
+          targetPkgs = pkgs: [ pkgs.idris2.chez pkgs.glibc ];
+
+          runScript = pkgs.writeShellScript "amon" ''
+            export LD_LIBRARY_PATH="${amonLib}/lib/amon_app:${pkgs.lib.makeSearchPath "lib" runtimeLibs}"
+            exec scheme --program "${amonLib}/lib/amon_app/amon.so" "$@"
+          '';
         };
       });
 }
