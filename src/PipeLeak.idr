@@ -9,6 +9,7 @@ import System.Posix.File.FileDesc
 import IO.Async
 import IO.Async.Loop.PollH
 import IO.Async.Loop.Posix
+import IO.Async.Loop.Epoll
 import IO.Async.Posix
 import IO.Async.Util
 import System.Posix.Poll.Types
@@ -140,7 +141,7 @@ showChildren = do
 
 covering
 main : IO ()
-main = simpleApp $ the (Async Poll [] ()) $ do
+main = epollApp $ the (Async Poll [] ()) $ do
   liftIO $ putStrLn "=== Async pipe leak reproducer ==="
   liftIO $ putStrLn "Running 20 commands with parJoin 3"
   liftIO $ putStrLn ""

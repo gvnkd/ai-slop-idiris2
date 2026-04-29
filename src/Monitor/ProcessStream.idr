@@ -261,27 +261,29 @@ parameters {auto ep : PollH Poll}
   runProcess task queue readFd pid logFd =
     guarantee
       (assert_total $ do
-        ignore $ weakenErrors $
-          putEvent queue $ JobFinished task.name RUNNING
+         ignore $ weakenErrors $
+           putEvent queue $ JobStarted task.name pid
 
-        bufRef <- liftIO $ newIORef ""
+         bufRef <- liftIO $ newIORef ""
 
-        asyncReadLoop readFd task.name logFd queue bufRef
+         asyncReadLoop readFd task.name logFd queue bufRef
 
-        remaining <- liftIO $ readIORef bufRef
-        when (length remaining > 0) $
-          emitLine task.name logFd queue remaining
+         remaining <- liftIO $ readIORef bufRef
+         when (length remaining > 0) $
+           emitLine task.name logFd queue remaining
 
-        (_, status) <- waitpid (the PidT $ cast pid) WNOHANG
-        let exitCode : Int
-            exitCode = case status of
-                           Exited code => cast code
-                           _           => 127
-        let jobStatus = if exitCode == 0 then SUCCESS else FAILED
+         (reaped, status) <- waitpid (the PidT $ cast pid) WNOHANG
+         let exitCode : Int
+             exitCode = if reaped == 0
+                           then 1
+                           else case status of
+                                    Exited code => cast code
+                                    _           => 127
+         let jobStatus = if exitCode == 0 then SUCCESS else FAILED
 
-        writeProcessFooter logFd exitCode
-        ignore $ weakenErrors $
-          putEvent queue $ JobFinished task.name jobStatus)
+         writeProcessFooter logFd exitCode
+         ignore $ weakenErrors $
+           putEvent queue $ JobFinished task.name jobStatus)
       (do
         weakenErrors $ closeFdAsync readFd
         case logFd of

@@ -21,6 +21,9 @@ covering
 run : IO ()
 run = do
   ignore $ system "mkdir -p logs"
+  mThreads <- getEnv "IDRIS2_ASYNC_THREADS"
+  when (isNothing mThreads) $
+    ignore $ setEnv "IDRIS2_ASYNC_THREADS" "1" False
   Just tasks <- loadTasks "tasks.json"
     | Nothing => die "Failed to load tasks.json"
   let maxWorkers = 3

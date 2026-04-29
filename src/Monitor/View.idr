@@ -26,10 +26,13 @@ View JobEntry where
   paint state window entry = do
     let (badgeRect, rest) = window.splitLeft 3
     paint Normal badgeRect entry.status
+    let sel = case state of
+               Focused => " > "
+               _       => " "
     case state of
       Focused => sgr [SetReversed True]
       _       => sgr []
-    showTextAt rest.nw $ " " ++ entry.task.name
+    showTextAt rest.nw $ sel ++ entry.task.name
     sgr [Reset]
 
 View LogLine where

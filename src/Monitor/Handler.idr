@@ -5,11 +5,18 @@ import TUI.Key
 import Data.List.Quantifiers
 import Data.List.Quantifiers.Extra
 import Monitor.Types
+import Monitor.Process
+import System.Posix.Signal.Types
+
+%foreign "C:kill,libc"
+prim__kill : Int -> Int -> PrimIO Int
 
 public export
 onJobUpdate : Event.Handler JobMonitorState () JobUpdate
 onJobUpdate (JobOutput name lines) st =
   update $ appendJobLogBatch name lines st
+onJobUpdate (JobStarted name pid) st =
+  update $ setJobStatus name RUNNING $ setJobPid name pid st
 onJobUpdate (JobFinished name status) st =
   update $ updateJobStatus name status st
 onJobUpdate (AllDone _) st =
@@ -39,15 +46,22 @@ onKey (Alpha 'j') st =
   in update $ { logOffset := newOffset } st
 onKey (Alpha 'l') st =
   let newOffset = st.logColOffset + 4
-  in update $ { logColOffset := newOffset } st
+  in update $ { logOffset := newOffset } st
 onKey (Alpha 'h') st =
   let newOffset = case st.logColOffset of
                     0   => 0
                     S n => n `minus` 4
   in update $ { logColOffset := newOffset } st
 onKey (Alpha 'x') st =
-  case findRunningJobName st of
-    Just name => update $ cancelJobByName name st
+  case findSelectedJobName st of
+    Just name =>
+      let (newSt, mPid) = cancelJobByName name st
+      in case mPid of
+           Just pid => do
+             ignore $ primIO $ prim__kill pid 15
+             ts <- getCurrentTimeStr
+             update $ appendJobLogBatch name [MkLogLine "" "\{ts} CANCELLED"] newSt
+           Nothing => update newSt
     Nothing   => ignore
 onKey (Alpha 'q') _ = exit
 onKey Escape      _ = exit
