@@ -30,6 +30,8 @@ This is my personal memory page. I want to store all my feelings and memories he
 
 **`pipe2` with `O_CLOEXEC` (524288 / 0x80000):** Chez Scheme runtime forks additional OS processes for fiber scheduling. These children inherit all open pipe fds. Use `pipe2()` with `O_CLOEXEC` instead of `pipe()` so pipe fds are automatically closed on exec. The `dup2(writeFd, 1/2)` in the child clears CLOEXEC on stdout/stderr, so the exec'd command still works. Without this, Chez workers holding pipe write-ends prevent EOF on the read end, causing `asyncPollFd` to hang forever.
 
+**Multi-threaded `fork`+`exec` deadlock (CRITICAL):** When `IDRIS2_ASYNC_THREADS≥2`, the Chez runtime has multiple pthreads. Calling `fork()` from Idris/Chez code copies all memory including locked mutexes from other threads. Any Chez/Idris code running between `fork` and `exec` in the child can deadlock on these inherited locks. The fix: use a pure C wrapper (`spawn_child`) that does ONLY async-signal-safe syscalls between `fork` and `exec`: `close`, `dup2`, `open`, `execl`, `_exit`. Do NOT use `opendir`, `snprintf`, `malloc`, or any Idris/Chez runtime functions in the child path. This is why `IDRIS2_ASYNC_THREADS=1` was safe — no other threads exist to hold locks.
+
 ---
 
 ## Project: amon (Ansible Monitor TUI)
@@ -60,7 +62,8 @@ The TUI limits parallel task execution to a configurable number of workers (defa
 **Implementation:**
 - `Monitor.Main.run` splits `tasks.json` into initial batch (first N) and queued tasks
 - `Monitor.Source.resultsSource` takes `(List ProcInfo, List ProcessTask)` — active processes and queued tasks
-- When a process finishes, `resultsSource` spawns the next queued task using `liftIO . spawnCmd`
+- Uses a BQueue-based worker pool (Plan B architecture) to avoid `parJoin` fiber cancellation bugs
+- Tasks spawn via `Monitor.ProcessStream.processPull` which calls a pure-C `spawn_child` wrapper (async-signal-safe fork/exec, required for `IDRIS2_ASYNC_THREADS≥2`)
 - Queued jobs appear in the UI as `[Q]`, running as `[R]`, completed as `[+]`/`[x]`
 
 To change the worker count, modify `maxWorkers` in `Monitor.Main.run`.
@@ -71,7 +74,7 @@ To change the worker count, modify `maxWorkers` in `Monitor.Main.run`.
 - `src/Protocol.idr` — shared types: `ProcessTask`, `TaskState`, `Ticket`, `StepResult`
 - `src/Worker.idr` — worker pool for the legacy CLI mode
 - `src/Main.idr` — legacy CLI entry point (worker pool, not TUI)
-- `src/cstr_write.c` — C FFI helper: `cstr_write()` (write string to fd) and `cstr_timestamp()` (formatted timestamp via strftime). Compiled to `cstr_write.so`, copied to `build/exec/amon_app/` at build time.
+- `src/cstr_write.c` — C FFI helpers: `cstr_write()` (write string to fd), `cstr_timestamp()` (formatted timestamp), and `spawn_child()` (async-signal-safe fork/exec wrapper for multi-threaded Chez). Compiled to `cstr_write.so`, copied to `build/exec/amon_app/` at build time.
 - `tasks.json` — task config file, parsed at runtime by both modes
 - `test/playbook.yml` — ansible playbook used as a test task
 
