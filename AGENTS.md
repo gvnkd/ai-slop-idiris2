@@ -24,7 +24,7 @@ This is my personal memory page. I want to store all my feelings and memories he
 
 **`weakenErrors` inside `try [handler]`:** Adding `weakenErrors` calls inside a `try [onErrno]` block changes the error type from `[Errno]` to a broader type, causing unification failures. Keep `weakenErrors` calls outside `try` blocks, or restructure so logging happens after the `try` completes.
 
-**C FFI shared libraries:** The Idris2-generated wrapper script sets `LD_LIBRARY_PATH` to `$DIR/amon_app`. Custom `.so` files (like `cstr_write.so`) must be copied to `build/exec/amon_app/` at build time. Use `%foreign "C:sym,libname"` syntax where `libname` is the `.so` filename without the `lib` prefix and `.so` extension.
+**C FFI shared libraries:** Follow the standard Idris2 pattern: C code goes in `support/`, built by a `Makefile` with `prebuild = "make -C support"` in `.ipkg`. The shared library is named `<package>-idris` and referenced as `%foreign "C:sym,package-idris"`. The idris2 compiler copies it to `build/exec/<executable>_app/` automatically. For Linux, the file must have `.so` extension (e.g., `amon-idris.so`).
 
 **`spawnCmd` command construction:** The command built with `unwords task.args` is passed to `sh -c`. When the task path is `sh -c "inner command"`, the inner `sh -c` receives only the first word as its command argument. Quote arguments properly or avoid nested `sh -c` patterns.
 
@@ -74,7 +74,7 @@ To change the worker count, modify `maxWorkers` in `Monitor.Main.run`.
 - `src/Protocol.idr` — shared types: `ProcessTask`, `TaskState`, `Ticket`, `StepResult`
 - `src/Worker.idr` — worker pool for the legacy CLI mode
 - `src/Main.idr` — legacy CLI entry point (worker pool, not TUI)
-- `src/cstr_write.c` — C FFI helpers: `cstr_write()` (write string to fd), `cstr_timestamp()` (formatted timestamp), and `spawn_child()` (async-signal-safe fork/exec wrapper for multi-threaded Chez). Compiled to `cstr_write.so`, copied to `build/exec/amon_app/` at build time.
+- `support/amon-idris.c` — C FFI helpers: `amon_cstr_write()` (write string to fd), `amon_cstr_timestamp()` (formatted timestamp), and `amon_spawn_child()` (async-signal-safe fork/exec wrapper for multi-threaded Chez). Built by `support/Makefile` as `amon-idris`, copied to `build/exec/amon_app/amon-idris.so` by `postbuild` hook.
 - `tasks.json` — task config file, parsed at runtime by both modes
 - `test/playbook.yml` — ansible playbook used as a test task
 
@@ -102,7 +102,7 @@ base, contrib, linear, json, elab-util, ansi, tui, tui-async, posix
 
 ### C FFI Helpers
 
-Custom C code lives in `src/cstr_write.c` and is compiled to `cstr_write.so` with `gcc -shared -fPIC`. The `.so` must be placed in `build/exec/amon_app/` for the runtime loader to find it. The `.so` is gitignored via `*.so` in `.gitignore`.
+Custom C code lives in `support/amon-idris.c` and is built by `support/Makefile` following the standard Idris2 pattern. The `.so` is copied to `build/exec/amon_app/` by the `postbuild` hook in `amon.ipkg`.
 
 ### Testing with zrun
 

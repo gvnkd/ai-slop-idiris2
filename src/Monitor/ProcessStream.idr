@@ -36,10 +36,10 @@ import Data.ByteVect
 
 %default total
 
-%foreign "C:cstr_write,cstr_write"
+%foreign "C:amon_cstr_write,amon-idris"
 prim__cstr_write : Int -> String -> PrimIO CInt
 
-%foreign "C:spawn_child,cstr_write"
+%foreign "C:amon_spawn_child,amon-idris"
 prim__spawn_child : String -> AnyPtr -> Int -> PrimIO CInt
 
 %foreign "C:close,libc"

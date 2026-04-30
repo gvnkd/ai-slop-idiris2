@@ -39,5 +39,9 @@ modules    = Protocol
            , Monitor.Main
            , Main
 
+prebuild = "make -C support"
+
+postbuild = "cp support/amon-idris build/exec/amon_app/amon-idris.so || true"
+
 -- Опции компилятора (например, для проверки тотальности по умолчанию)
 -- opts       = "--total"

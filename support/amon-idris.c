@@ -2,7 +2,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
-#include <pthread.h>
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -10,11 +9,11 @@
 #include <errno.h>
 #include <sys/wait.h>
 
-int cstr_write(int fd, const char *s) {
+int amon_cstr_write(int fd, const char *s) {
     return (int)write(fd, s, strlen(s));
 }
 
-const char *cstr_timestamp() {
+const char *amon_cstr_timestamp() {
     static char buf[64];
     time_t now = time(NULL);
     struct tm *tm_info = localtime(&now);
@@ -23,9 +22,9 @@ const char *cstr_timestamp() {
 }
 
 /*
- * spawn_child: fork + exec a shell command with stdout/stderr redirected
- * to a pipe. All fd setup happens in C using ONLY async-signal-safe
- * functions (no malloc, no opendir, no snprintf, etc.).
+ * amon_spawn_child: fork + exec a shell command with stdout/stderr
+ * redirected to a pipe. All fd setup happens in C using ONLY
+ * async-signal-safe functions (no malloc, no opendir, no snprintf).
  *
  * This avoids deadlock in multi-threaded Chez processes, where forked
  * children inherit locked mutexes from other threads.
@@ -37,7 +36,7 @@ const char *cstr_timestamp() {
  *
  * Returns 0 on success, -1 on error.
  */
-int spawn_child(const char *cmd, int *fds_out, int flags) {
+int amon_spawn_child(const char *cmd, int *fds_out, int flags) {
     int pipefd[2];
     if (pipe2(pipefd, flags) < 0) {
         return -1;
@@ -84,19 +83,19 @@ int spawn_child(const char *cmd, int *fds_out, int flags) {
 }
 
 /*
- * Legacy wrappers for pipe/close operations.
+ * Legacy wrappers for pipe/close operations (used by old spawnCmd).
  */
 
-int pipe_track(void *fds) {
+int amon_pipe_track(void *fds) {
     int *fd_arr = (int *)fds;
     return pipe(fd_arr);
 }
 
-int pipe2_track(void *fds, int flags) {
+int amon_pipe2_track(void *fds, int flags) {
     int *fd_arr = (int *)fds;
     return pipe2(fd_arr, flags);
 }
 
-int close_track(int fd) {
+int amon_close_track(int fd) {
     return close(fd);
 }

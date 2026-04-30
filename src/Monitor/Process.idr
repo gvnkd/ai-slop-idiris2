@@ -15,7 +15,7 @@ import IO.Async.Util
 import System.Posix.File
 import System.Posix.Process
 
-%foreign "C:pipe_track,cstr_write"
+%foreign "C:amon_pipe_track,amon-idris"
 prim__pipe_track : AnyPtr -> PrimIO CInt
 
 %foreign "C:fork,libc"
@@ -30,7 +30,7 @@ prim__execvp : String -> AnyPtr -> PrimIO Int
 %foreign "C:dup2,libc"
 prim__dup2 : Int -> Int -> PrimIO Int
 
-%foreign "C:close_track,cstr_write"
+%foreign "C:amon_close_track,amon-idris"
 prim__close_track : Int -> PrimIO Int
 
 %foreign "C:fcntl,libc"
@@ -42,10 +42,10 @@ prim__fcntl_set : Int -> Int -> Int -> PrimIO Int
 %foreign "C:open,libc"
 prim__open : String -> Int -> PrimIO Int
 
-%foreign "C:cstr_write,cstr_write"
+%foreign "C:amon_cstr_write,amon-idris"
 prim__cstr_write : Int -> String -> PrimIO CInt
 
-%foreign "C:cstr_timestamp,cstr_write"
+%foreign "C:amon_cstr_timestamp,amon-idris"
 prim__cstr_timestamp : PrimIO String
 
 public export

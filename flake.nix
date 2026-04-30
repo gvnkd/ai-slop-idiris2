@@ -150,13 +150,11 @@
 
           buildPhase = ''
             idris2 --build amon.ipkg
-            gcc -shared -fPIC -o cstr_write.so src/cstr_write.c
           '';
 
           installPhase = ''
             mkdir -p $out/lib/amon_app
             cp -r build/exec/amon_app/* $out/lib/amon_app/
-            cp cstr_write.so $out/lib/amon_app/
           '';
         };
 
