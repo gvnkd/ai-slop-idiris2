@@ -1,17 +1,17 @@
 package pipeleak
 
-main       = PipeLeak
+main = PipeLeak
 executable = pipeleak
-sourcedir  = "src"
+sourcedir = "src"
 
-depends    = base >= 0.5.1
-           , contrib
-           , posix
-           , cptr
-           , async
-           , async-posix
-           , async-epoll
-           , streams
-           , streams-posix
+depends = base
+       , contrib
+       , linear
+       , posix
+       , streams
+       , streams-posix
+       , async
+       , async-posix
+       , async-epoll
 
-modules    = PipeLeak
+modules = PipeLeak

@@ -24,6 +24,7 @@ import System.Posix.Poll.Types
 import System.Posix.File
 import System.Posix.File.FileDesc
 import System.Posix.Process
+import System.Posix.Process.Flags
 import System.Posix.Errno
 import System.Posix.Signal
 import System.File
@@ -35,29 +36,17 @@ import Data.ByteVect
 
 %default total
 
-%foreign "C:pipe2,libc"
-prim__pipe2 : AnyPtr -> Int -> PrimIO CInt
+%foreign "C:cstr_write,cstr_write"
+prim__cstr_write : Int -> String -> PrimIO CInt
+
+%foreign "C:spawn_child,cstr_write"
+prim__spawn_child : String -> AnyPtr -> Int -> PrimIO CInt
 
 %foreign "C:close,libc"
 prim__close : Int -> PrimIO Int
 
 %foreign "C:open,libc"
-prim__open : String -> Int -> PrimIO Int
-
-%foreign "C:open,libc"
 prim__open3 : String -> Int -> Int -> PrimIO Int
-
-%foreign "C:fork,libc"
-prim__fork : PrimIO Int
-
-%foreign "C:dup2,libc"
-prim__dup2 : Int -> Int -> PrimIO Int
-
-%foreign "C:execvp,libc"
-prim__execvp : String -> AnyPtr -> PrimIO Int
-
-%foreign "C:_exit,libc"
-prim__exit : Int -> PrimIO ()
 
 %foreign "C:fcntl,libc"
 prim__fcntl : Int -> Int -> PrimIO Int
@@ -84,68 +73,40 @@ killChild : Int -> Async Poll [Errno] ()
 killChild pid = kill (the PidT $ cast pid) SIGTERM
 
 covering
-closeFdsFrom : Int -> IO ()
-closeFdsFrom n =
-  when (n < 1024) $ do
-    ignore $ primIO $ prim__close n
-    closeFdsFrom (n + 1)
-
-covering
 spawnProcessSetup : ProcessTask -> IO (Maybe (Int, Int, Maybe Int))
 spawnProcessSetup task = do
   let baseCmd = "timeout " ++ show task.timeout ++ "s " ++ task.path
                 ++ " " ++ unwords task.args
   let envPrefix = concat $ map (\(k,v) => k ++ "=" ++ v ++ " ") task.envVars
   let fullCmd = if envPrefix == "" then baseCmd else envPrefix ++ baseCmd
-  pipeArr <- malloc Fd 2
-  rc <- primIO $ prim__pipe2 (unsafeUnwrap pipeArr) 524288
+  outArr <- malloc Fd 2
+  rc <- primIO $ prim__spawn_child fullCmd (unsafeUnwrap outArr) 524288
   if rc < 0
-    then do free pipeArr; pure Nothing
+    then do free outArr; pure Nothing
     else do
       Just buf <- newBuffer 8 | Nothing => do
-        free pipeArr; pure Nothing
-      primIO $ prim__copy_pb (unsafeUnwrap pipeArr) buf 8
-      free pipeArr
+        free outArr; pure Nothing
+      primIO $ prim__copy_pb (unsafeUnwrap outArr) buf 8
+      free outArr
       readBits <- getBits32 buf 0
-      writeBits <- getBits32 buf 4
-      let readFd  = the Int (cast readBits)
-          writeFd = the Int (cast writeBits)
-      childPid <- primIO prim__fork
-      if childPid == 0
-        then do
-          _ <- primIO $ prim__close readFd
-          _ <- primIO $ prim__dup2 writeFd 1
-          _ <- primIO $ prim__dup2 writeFd 2
-          _ <- primIO $ prim__close writeFd
-          closeFdsFrom 3
-          let blk = fromMaybe True task.blockingIO
-          when blk $ do
-            devnull <- primIO $ prim__open "/dev/null" 0
-            _ <- primIO $ prim__dup2 devnull 0
-            _ <- primIO $ prim__close devnull
-            pure ()
-          argsArr <- fromList [Just "sh", Just "-c", Just fullCmd, Nothing]
-          _ <- primIO $ prim__execvp "/bin/sh" (unsafeUnwrap argsArr)
-          free argsArr
-          primIO $ prim__exit 127
-          pure Nothing
-        else do
-          _ <- primIO $ prim__close writeFd
-          flags <- primIO $ prim__fcntl readFd 3
-          _ <- primIO $ prim__fcntl_set readFd 4 (flags .|. 2048)
-          logFd <- maybeOpenLog task.logFile
-          pure $ Just (readFd, childPid, logFd)
-      where
-        maybeOpenLog : Maybe String -> IO (Maybe Int)
-        maybeOpenLog Nothing = pure Nothing
-        maybeOpenLog (Just path) = do
-          fd <- primIO $ prim__open3 path 1089 384
-          if fd < 0 then pure Nothing
-            else do
-              ts <- getCurrentTimeStr
-              let header = "[START] " ++ ts ++ "\n"
-              _ <- writeToFd fd header
-              pure $ Just fd
+      pidBits  <- getBits32 buf 4
+      let readFd   = the Int (cast readBits)
+          childPid = the Int (cast pidBits)
+      flags <- primIO $ prim__fcntl readFd 3
+      _ <- primIO $ prim__fcntl_set readFd 4 (flags .|. 2048)
+      logFd <- maybeOpenLog task.logFile
+      pure $ Just (readFd, childPid, logFd)
+    where
+      maybeOpenLog : Maybe String -> IO (Maybe Int)
+      maybeOpenLog Nothing = pure Nothing
+      maybeOpenLog (Just path) = do
+        fd <- primIO $ prim__open3 path 1089 384
+        if fd < 0 then pure Nothing
+          else do
+            ts <- getCurrentTimeStr
+            let header = "[START] " ++ ts ++ "\n"
+            _ <- writeToFd fd header
+            pure $ Just fd
 
 splitOutputLocal : String -> String -> (List String, String)
 splitOutputLocal buf chunk = go [] [] (unpack (buf ++ chunk))
@@ -249,6 +210,34 @@ parameters {auto ep : PollH Poll}
          asyncReadLoop thisFd taskName mLogFd queue bufRef
 
   covering
+  drainRemaining : Has JobUpdate evts
+                  => Int -> String -> Maybe Int -> EventQueue evts
+                  -> Data.IORef.IORef String
+                  -> Async Poll [Errno] ()
+  drainRemaining fd taskName mLogFd queue bufRef = do
+    Just buf <- liftIO $ newBuffer 4096
+      | Nothing => pure ()
+    n <- liftIO $ primIO $ prim__sys_read fd buf 4096
+    if n > 0
+      then do
+        bs <- liftIO $ bufToByteString buf n
+        readChunkAct taskName mLogFd queue bufRef bs
+        drainRemaining fd taskName mLogFd queue bufRef
+      else
+        pure ()
+
+  covering
+  waitForChild : PidT -> Async Poll [Errno] (PidT, ProcStatus)
+  waitForChild pid = do
+    (reaped, status) <- waitpid pid WNOHANG
+    if reaped == 0
+      then do
+        ignore $ sleep 50.ms
+        waitForChild pid
+      else
+        pure (reaped, status)
+
+  covering
   runProcess : Has JobUpdate evts
                => ProcessTask
               -> EventQueue evts
@@ -262,11 +251,14 @@ parameters {auto ep : PollH Poll}
          ignore $ weakenErrors $
            putEvent queue $ JobStarted task.name pid
          bufRef <- liftIO $ newIORef ""
-         asyncReadLoop readFd task.name logFd queue bufRef
+         readFiber <- start $ asyncReadLoop readFd task.name logFd queue bufRef
+         (reaped, status) <- waitForChild (the PidT $ cast pid)
+         liftIO $ ignore $ primIO $ prim__close readFd
+         let reaped2 = reaped
+             status2 = status
          remaining <- liftIO $ readIORef bufRef
          when (length remaining > 0) $
            emitLine task.name logFd queue remaining
-         (reaped, status) <- waitpid (the PidT $ cast pid) neutral
          let exitCode : Int
              exitCode = case status of
                              Exited code => cast code
@@ -284,37 +276,17 @@ parameters {auto ep : PollH Poll}
           Just lfd => weakenErrors $ closeFdAsync lfd
           Nothing  => pure ())
 
-  covering
+  export covering
   processPull : Has JobUpdate evts
                 => ProcessTask
                 -> EventQueue evts
-                -> Async Poll [Errno] ()
+                -> Async Poll [] ()
   processPull task queue = assert_total $ do
     maybeRes <- liftIO $ spawnProcessSetup task
     case maybeRes of
-      Nothing => pure ()
+      Nothing => putEvent queue $ JobFinished task.name FAILED
       Just (readFd, pid, logFd) =>
-        runProcess task queue readFd pid logFd
-
-  covering
-  completionStream : Has JobUpdate evts
-                     => EventQueue evts
-                     -> AsyncStream Poll [Errno] ()
-  completionStream evtQueue = assert_total $ do
-    sleep 30.s
-    ignore $ exec $ weakenErrors $
-      putEvent evtQueue $ AllDone False
-
-  export covering
-  runAllTasks : Has JobUpdate evts
-                => (maxWorkers : Nat)
-                -> {auto 0 prf : IsSucc maxWorkers}
-                -> List ProcessTask
-                -> EventQueue evts
-                -> Pull (Async Poll) Void [Errno] ()
-  runAllTasks maxWorkers tasks queue =
-    drain $ parJoin maxWorkers outer
+        try [onErrno] $ runProcess task queue readFd pid logFd
     where
-      outer : AsyncStream Poll [Errno] (AsyncStream Poll [Errno] ())
-      outer = emits $ map (\t => exec $ processPull t queue) tasks
-              ++ [completionStream queue]
+      onErrno : Errno -> NoExcept ()
+      onErrno _ = putEvent queue $ JobFinished task.name FAILED

@@ -1,14 +1,5 @@
 [
   {
-    "name": "Ansible",
-    "path": "ansible-playbook",
-    "args": ["test/playbook.yml"],
-    "timeout": 20,
-    "logFile": "logs/ansible.log",
-    "blockingIO": true,
-    "envVars": {"ANSIBLE_FORCE_COLOR": "True"}
-  },
-  {
     "name": "Quick Sleep",
     "path": "sleep",
     "args": ["0.5"],
@@ -25,14 +16,6 @@
     "blockingIO": false
   },
   {
-    "name": "Watch",
-    "path": "./watch.sh",
-    "args": [ ],
-    "timeout": 30,
-    "logFile": "logs/watch.log",
-    "blockingIO": false
-  },
-  {
     "name": "Timed Out Task",
     "path": "sleep",
     "args": ["5"],
@@ -41,11 +24,43 @@
     "blockingIO": false
   },
   {
+    "name": "Failing Command",
+    "path": "false",
+    "args": [],
+    "timeout": 2,
+    "logFile": "logs/failing.log",
+    "blockingIO": false
+  },
+  {
     "name": "Missing Binary Test",
     "path": "/usr/bin/not-exist",
     "args": [],
     "timeout": 5,
     "logFile": "logs/missing.log",
+    "blockingIO": false
+  },
+  {
+    "name": "Echo Test",
+    "path": "echo",
+    "args": ["Hello from echo task"],
+    "timeout": 2,
+    "logFile": "logs/echo.log",
+    "blockingIO": false
+  },
+  {
+    "name": "Ansible",
+    "path": "ansible-playbook",
+    "args": ["-i", "localhost,", "test/playbook.yml"],
+    "timeout": 30,
+    "logFile": "logs/ansible.log",
+    "blockingIO": false
+  },
+  {
+    "name": "Watch",
+    "path": "sh",
+    "args": ["-c", "cat /dev/urandom | xxd | head -n 20"],
+    "timeout": 5,
+    "logFile": "logs/watch.log",
     "blockingIO": false
   }
 ]
