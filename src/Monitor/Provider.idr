@@ -72,6 +72,7 @@ parseTaskConfig : List (String, JSON) -> TaskConfig
 parseTaskConfig pairs =
   MkTaskConfig (getMaybeString pairs "batchName")
                (getMaybeNat pairs "maxWorkers")
+               (getMaybeNat pairs "leftWidth")
   where
     getMaybeNat : List (String, JSON) -> String -> Maybe Nat
     getMaybeNat ps k =
@@ -83,7 +84,7 @@ parseTaskFile : JSON -> Either String (TaskConfig, List ProcessTask)
 parseTaskFile (JObject topPairs) =
   let config = case lookup "config" topPairs of
                  Just (JObject configPairs) => parseTaskConfig configPairs
-                 _                         => MkTaskConfig Nothing Nothing
+                 _                          => MkTaskConfig Nothing Nothing Nothing
       batchPairs = filter (\(k, _) => k /= "config") topPairs
   in case traverse (\(batchName, batchJSON) =>
        case batchJSON of

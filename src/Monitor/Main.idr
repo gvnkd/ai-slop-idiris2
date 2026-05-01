@@ -33,7 +33,9 @@ run = do
                         Just n  => if n == 0 then 2 else n
                         Nothing => 2
   let entries = toJobEntries tasks
-  let initState = initialState batchName entries
+  let maxTitleLen = foldl (\acc, e => max acc (length e.task.name)) 0 entries
+  let leftWidth = fromMaybe (maxTitleLen + 2) config.leftWidth
+  let initState = initialState batchName leftWidth entries
   let mainLoop = asyncMain {evts = [JobUpdate, Key]}
                     [resultsSource (S (maxWorkers `minus` 1)) tasks]
   Prelude.ignore $ runView mainLoop handler initState

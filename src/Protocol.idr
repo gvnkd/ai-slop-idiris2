@@ -12,12 +12,14 @@ record TaskConfig where
   constructor MkTaskConfig
   batchName  : Maybe String
   maxWorkers : Maybe Nat
+  leftWidth  : Maybe Nat
 
 export
 FromJSON TaskConfig where
   fromJSON = withObject "TaskConfig" $ \o =>
     [| MkTaskConfig (fieldMaybe o "batchName")
-                    (fieldMaybe o "maxWorkers") |]
+                    (fieldMaybe o "maxWorkers")
+                    (fieldMaybe o "leftWidth") |]
 
 public export
 record JobParams where

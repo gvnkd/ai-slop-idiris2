@@ -61,6 +61,7 @@ public export
 record JobMonitorState where
   constructor MkJobMonitorState
   batchName    : String
+  leftColWidth : Nat
   jobs         : List JobEntry
   selected     : Nat
   jobLogs      : List (List LogLine)
@@ -85,9 +86,9 @@ getSelectedLogs : JobMonitorState -> List LogLine
 getSelectedLogs st = reverse $ fromMaybe [] $ indexNat st.selected st.jobLogs
 
 public export
-initialState : String -> List JobEntry -> JobMonitorState
-initialState batchName jobs =
-  MkJobMonitorState batchName jobs 0 (replicate (length jobs) [])
+initialState : String -> Nat -> List JobEntry -> JobMonitorState
+initialState batchName leftColWidth jobs =
+  MkJobMonitorState batchName leftColWidth jobs 0 (replicate (length jobs) [])
     (replicate (length jobs) Nothing) 0 0 False False
 
 public export

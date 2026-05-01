@@ -125,8 +125,7 @@ View JobMonitorState where
     let (legendText, _) = legendArea.splitLeft 40
     showTextAt legendText.nw
       "\x2191\x2193:jobs  j/k:vscroll  h/l:hscroll  x:cancel  q:quit"
-    let leftWidth = max 10 (integerToNat (natToInteger content.width * 3 `div` 10))
-    let (left, mid) = content.splitLeft leftWidth
+    let (left, mid) = content.splitLeft st.leftColWidth
     let (sep, right) = mid.splitLeft 1
     case st.jobs of
       [] => do
