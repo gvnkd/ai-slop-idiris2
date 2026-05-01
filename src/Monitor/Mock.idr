@@ -6,12 +6,12 @@ import Protocol
 public export
 loadMockJobs : IO (List JobEntry)
 loadMockJobs = pure [
-    MkJobEntry (MKProcessTask "List Root Directory" "ls" ["-la", "./"] 2 (Just "logs/root_dir.log") Nothing []) SUCCESS
-  , MkJobEntry (MKProcessTask "Quick Sleep" "sleep" ["0.5"] 1 (Just "logs/timeout_error.log") Nothing []) SUCCESS
-  , MkJobEntry (MKProcessTask "Timed Out Task" "sleep" ["5"] 1 Nothing Nothing []) TIMEDOUT
-  , MkJobEntry (MKProcessTask "Missing Binary Test" "/usr/bin/not-exist" [] 5 Nothing Nothing []) QUEUED
-  , MkJobEntry (MKProcessTask "Health Check" "echo" ["OK"] 1 Nothing Nothing []) RUNNING
-  , MkJobEntry (MKProcessTask "Very Long Job Name That Exceeds Column Width" "true" [] 1 Nothing Nothing []) QUEUED
+    MkJobEntry (MKProcessTask "List Root Directory" Nothing "ls" ["-la", "./"] 2 (Just "logs/root_dir.log") Nothing []) SUCCESS
+  , MkJobEntry (MKProcessTask "Quick Sleep" Nothing "sleep" ["0.5"] 1 (Just "logs/timeout_error.log") Nothing []) SUCCESS
+  , MkJobEntry (MKProcessTask "Timed Out Task" Nothing "sleep" ["5"] 1 Nothing Nothing []) TIMEDOUT
+  , MkJobEntry (MKProcessTask "Missing Binary Test" Nothing "/usr/bin/not-exist" [] 5 Nothing Nothing []) QUEUED
+  , MkJobEntry (MKProcessTask "Health Check" Nothing "echo" ["OK"] 1 Nothing Nothing []) RUNNING
+  , MkJobEntry (MKProcessTask "Very Long Job Name That Exceeds Column Width" Nothing "true" [] 1 Nothing Nothing []) QUEUED
   ]
 
 successLogs : String -> List LogLine

@@ -81,6 +81,23 @@ paintLogLines window colOffset (line :: rest) =
 autoScrollOffset : Nat -> Nat -> List LogLine -> Nat
 autoScrollOffset viewH scrollUp logs = minus (length logs) viewH `minus` scrollUp
 
+showCountAt : Pos -> Color -> Nat -> Context Pos
+showCountAt pos color n = do
+  sgr [SetForeground color]
+  let s = show (cast {to = Integer} n)
+  showTextAt pos s
+  sgr [Reset]
+  pure (pos.shiftRight (cast (length s)))
+
+jobCounts : List JobEntry -> (Nat, Nat, Nat, Nat, Nat)
+jobCounts jobs =
+  ( length jobs
+  , countQueued jobs
+  , countRunning jobs
+  , countFinished jobs
+  , countFailed jobs
+  )
+
 export covering
 View JobMonitorState where
   size _ = MkArea 80 24
@@ -88,24 +105,26 @@ View JobMonitorState where
     Box.fill ' ' window
     Box.border window
     let inner = shrink window
-    let (titleRect, body) = inner.splitTop 1
-    showTextAt titleRect.nw "Job Monitor"
-    body <- packTop Normal body HRule
+    let (titleRect, body0) = inner.splitTop 1
+    let counts = jobCounts st.jobs
+    let batchTitle = st.batchName ++ " ["
+    showTextAt titleRect.nw batchTitle
+    p1 <- showCountAt (titleRect.nw.shiftRight (cast (length batchTitle))) White (fst counts)
+    showTextAt p1 "/"
+    p2 <- showCountAt (p1.shiftRight 1) Yellow (fst (snd counts))
+    showTextAt p2 "/"
+    p3 <- showCountAt (p2.shiftRight 1) Cyan (fst (snd (snd counts)))
+    showTextAt p3 "/"
+    p4 <- showCountAt (p3.shiftRight 1) Green (fst (snd (snd (snd counts))))
+    showTextAt p4 "/"
+    p5 <- showCountAt (p4.shiftRight 1) Red (snd (snd (snd (snd counts))))
+    showTextAt p5 "]"
+    body <- packTop Normal body0 HRule
     let (content, legendArea) = body.splitBottom 2
     legendArea <- packTop Normal legendArea HRule
-    let (legendText, statusArea) = legendArea.splitLeft 40
+    let (legendText, _) = legendArea.splitLeft 40
     showTextAt legendText.nw
       "\x2191\x2193:jobs  j/k:vscroll  h/l:hscroll  x:cancel  q:quit"
-    case (st.allDone, st.hasFailed) of
-      (True, False) => do
-        sgr [SetForeground Green]
-        showTextAt statusArea.nw "ALL JOBS DONE"
-        sgr [Reset]
-      (True, True) => do
-        sgr [SetForeground Yellow]
-        showTextAt statusArea.nw "ALL JOBS DONE"
-        sgr [Reset]
-      _ => pure ()
     let leftWidth = max 10 (integerToNat (natToInteger content.width * 3 `div` 10))
     let (left, mid) = content.splitLeft leftWidth
     let (sep, right) = mid.splitLeft 1

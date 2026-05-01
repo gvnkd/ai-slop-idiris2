@@ -35,7 +35,8 @@ run = do
   Just tasks <- loadTasks "tasks.json"
     | Nothing => die "Failed to load tasks.json"
   let entries = toJobEntries tasks
-  let initState = initialState entries
+  let batchName = fromMaybe "Job Batch" $ head' $ mapMaybe (.batchName) tasks
+  let initState = initialState batchName entries
   let mainLoop = asyncMain {evts = [JobUpdate, Key]}
                     [resultsSource (S (maxWorkers `minus` 1)) tasks]
   Prelude.ignore $ runView mainLoop handler initState

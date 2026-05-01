@@ -38,7 +38,7 @@ readAll f = do
 
 -- Запуск с захватом вывода
 runCmdCapture : ProcessTask -> IO (Int, String)
-runCmdCapture (MKProcessTask _ path args timeout _ _ _) = do
+runCmdCapture (MKProcessTask _ _ path args timeout _ _ _) = do
   let cmd = "timeout " ++ show timeout ++ "s " ++ path ++ " " ++ unwords args ++ " 2>&1"
 
   -- Распаковываем Either, возвращаемый popen

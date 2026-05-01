@@ -354,6 +354,81 @@ cmd_stop() {
   info "Session stopped."
 }
 
+cmd_test() {
+  local max_wait="${1:-60}"
+  local wait_interval="${2:-1}"
+
+  # Start if not running
+  if ! session_exists; then
+    cmd_start
+    sleep 2
+  fi
+
+  require_session
+  local pane_id
+  pane_id=$(wait_for_pane 20)
+
+  info "Testing amon (max wait: ${max_wait}s, interval: ${wait_interval}s)..."
+
+  local elapsed=0
+  local done=false
+  local last_title=""
+
+  while [[ "$elapsed" -lt "$max_wait" ]]; do
+    local screen
+    screen=$(zj action dump-screen --pane-id "$pane_id" --full 2>/dev/null || true)
+
+    # Extract title pattern: "BatchName [total/queued/running/finished/failed]"
+    # Strip ANSI escape sequences and look for the counter pattern
+    local title_line
+    title_line=$(echo "$screen" | sed 's/\x1b\[[0-9;]*m//g' | grep -oE '[^[]+\[[0-9]+/[0-9]+/[0-9]+/[0-9]+/[0-9]+\]' | tail -1)
+
+      if [[ -n "$title_line" ]]; then
+      last_title="$title_line"
+      # Extract queued and running counts from "Batch [total/queued/running/finished/failed]"
+      local queued running
+      # queued is 2nd number: match [N/N and extract last N
+      queued=$(echo "$title_line" | grep -oE '\[[0-9]+/[0-9]+' | grep -oE '[0-9]+$')
+      # running is 3rd number: match [N/N/N and extract last N
+      running=$(echo "$title_line" | grep -oE '\[[0-9]+/[0-9]+/[0-9]+' | grep -oE '[0-9]+$')
+
+      if [[ "$queued" == "0" && "$running" == "0" ]]; then
+        done=true
+        break
+      fi
+    fi
+
+    sleep "$wait_interval"
+    elapsed=$((elapsed + wait_interval))
+  done
+
+  # Dump final screen
+  echo ""
+  echo "=== Final Screen ==="
+  zj action dump-screen --pane-id "$pane_id" --full 2>/dev/null || true
+  echo ""
+  echo "=== Test Result ==="
+
+  if [[ "$done" == "true" ]]; then
+    # Check for failures
+    local failed
+    failed=$(echo "$last_title" | grep -oE '[0-9]+\]$' | grep -oE '[0-9]+')
+    if [[ "$failed" == "0" ]]; then
+      echo "SUCCESS: All jobs completed. Title: $last_title"
+      cmd_stop
+      return 0
+    else
+      echo "SUCCESS (with failures): All jobs completed. Title: $last_title"
+      cmd_stop
+      return 0
+    fi
+  else
+    echo "TIMEOUT: Jobs did not complete within ${max_wait}s. Last title: $last_title"
+    cmd_stop
+    return 1
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Usage: ./zrun [option] [args]
@@ -369,6 +444,7 @@ Options:
   --write-chars TEXT Write character(s) to the pane
   --subscribe        Stream viewport updates as NDJSON
   --status           Show session and pane status
+  --test [MAX_WAIT]  Run test: wait for all jobs to complete, report result
   --stop             Kill the zellij session
   --help             Show this help
 
@@ -383,6 +459,7 @@ Examples:
   ./zrun --send-keys Down Enter   # Navigate and select
   ./zrun --write-chars hello      # Type text
   ./zrun --subscribe              # Live viewport stream
+  ./zrun --test                   # Run test: wait for completion, report result
   ./zrun --stop                   # Clean up
 EOF
 }
@@ -397,7 +474,7 @@ while [[ $# -gt 0 ]]; do
       NO_DETAIL=true
       shift
       ;;
-    --rebuild|--attach|--screen|--screen-file|--send-keys|--write-chars|--subscribe|--status|--stop|--help|-h)
+    --rebuild|--attach|--screen|--screen-file|--send-keys|--write-chars|--subscribe|--status|--test|--stop|--help|-h)
       break
       ;;
     *)
@@ -439,6 +516,10 @@ case "${1:-}" in
   --status)
     shift
     cmd_status "$@"
+    ;;
+  --test)
+    shift
+    cmd_test "$@"
     ;;
   --stop)
     shift

@@ -60,6 +60,7 @@ data CompletionMsg
 public export
 record JobMonitorState where
   constructor MkJobMonitorState
+  batchName    : String
   jobs         : List JobEntry
   selected     : Nat
   jobLogs      : List (List LogLine)
@@ -84,10 +85,30 @@ getSelectedLogs : JobMonitorState -> List LogLine
 getSelectedLogs st = reverse $ fromMaybe [] $ indexNat st.selected st.jobLogs
 
 public export
-initialState : List JobEntry -> JobMonitorState
-initialState jobs =
-  MkJobMonitorState jobs 0 (replicate (length jobs) [])
+initialState : String -> List JobEntry -> JobMonitorState
+initialState batchName jobs =
+  MkJobMonitorState batchName jobs 0 (replicate (length jobs) [])
     (replicate (length jobs) Nothing) 0 0 False False
+
+public export
+countByStatus : JobDisplayStatus -> List JobEntry -> Nat
+countByStatus status = length . filter (\e => e.status == status)
+
+public export
+countQueued : List JobEntry -> Nat
+countQueued = countByStatus QUEUED
+
+public export
+countRunning : List JobEntry -> Nat
+countRunning = countByStatus RUNNING
+
+public export
+countFinished : List JobEntry -> Nat
+countFinished jobs = countByStatus SUCCESS jobs + countByStatus TIMEDOUT jobs
+
+public export
+countFailed : List JobEntry -> Nat
+countFailed = countByStatus FAILED
 
 updateAtIdx : Nat -> (a -> a) -> List a -> List a
 updateAtIdx _ _ [] = []

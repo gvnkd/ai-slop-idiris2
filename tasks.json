@@ -1,6 +1,7 @@
 [
   {
     "name": "Quick Sleep",
+    "batchName": "Test Suite",
     "path": "sleep",
     "args": ["0.5"],
     "timeout": 1,
@@ -9,6 +10,7 @@
   },
   {
     "name": "Colored Output",
+    "batchName": "Test Suite",
     "path": "ls",
     "args": ["--color=always", "-la", "/"],
     "timeout": 2,
@@ -17,6 +19,7 @@
   },
   {
     "name": "Timed Out Task",
+    "batchName": "Test Suite",
     "path": "sleep",
     "args": ["5"],
     "timeout": 1,
@@ -25,6 +28,7 @@
   },
   {
     "name": "Failing Command",
+    "batchName": "Test Suite",
     "path": "false",
     "args": [],
     "timeout": 2,
@@ -33,6 +37,7 @@
   },
   {
     "name": "Missing Binary Test",
+    "batchName": "Test Suite",
     "path": "/usr/bin/not-exist",
     "args": [],
     "timeout": 5,
@@ -41,6 +46,7 @@
   },
   {
     "name": "Echo Test",
+    "batchName": "Test Suite",
     "path": "echo",
     "args": ["Hello from echo task"],
     "timeout": 2,
@@ -49,6 +55,7 @@
   },
   {
     "name": "Ansible",
+    "batchName": "Test Suite",
     "path": "ansible-playbook",
     "args": ["-i", "localhost,", "test/playbook.yml"],
     "timeout": 30,
@@ -57,6 +64,7 @@
   },
   {
     "name": "Watch",
+    "batchName": "Test Suite",
     "path": "sh",
     "args": ["-c", "cat /dev/urandom | xxd | head -n 20"],
     "timeout": 5,

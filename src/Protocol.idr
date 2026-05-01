@@ -11,6 +11,7 @@ public export
 record ProcessTask where
   constructor MKProcessTask
   name       : String
+  batchName  : Maybe String
   path       : String
   args       : List String
   timeout    : Int
@@ -25,6 +26,7 @@ export
 FromJSON ProcessTask where
   fromJSON = withObject "ProcessTask" $ \o =>
     [| MKProcessTask (field      o "name")
+                     (fieldMaybe o "batchName")
                      (field      o "path")
                      (field      o "args")
                      (field      o "timeout")
