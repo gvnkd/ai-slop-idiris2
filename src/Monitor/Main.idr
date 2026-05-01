@@ -25,17 +25,14 @@ run = do
   mThreads <- getEnv "IDRIS2_ASYNC_THREADS"
   when (isNothing mThreads) $
     ignore $ setEnv "IDRIS2_ASYNC_THREADS" "1" False
-  args <- getArgs
-  let maxWorkers : Nat
-      maxWorkers = case args of
-                        (_ :: n :: _) =>
-                          let k = stringToNatOrZ n
-                          in if k == 0 then 2 else k
-                        _ => 2
-  Just tasks <- loadTasks "tasks.json"
+  Just (config, tasks) <- loadTasks "tasks.json"
     | Nothing => die "Failed to load tasks.json"
+  let batchName = fromMaybe "Job Batch" config.batchName
+  let maxWorkers : Nat
+      maxWorkers = case config.maxWorkers of
+                        Just n  => if n == 0 then 2 else n
+                        Nothing => 2
   let entries = toJobEntries tasks
-  let batchName = fromMaybe "Job Batch" $ head' $ mapMaybe (.batchName) tasks
   let initState = initialState batchName entries
   let mainLoop = asyncMain {evts = [JobUpdate, Key]}
                     [resultsSource (S (maxWorkers `minus` 1)) tasks]

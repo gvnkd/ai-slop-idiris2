@@ -8,10 +8,20 @@ import Data.SortedMap
 %language ElabReflection
 
 public export
-record ProcessTask where
-  constructor MKProcessTask
-  name       : String
+record TaskConfig where
+  constructor MkTaskConfig
   batchName  : Maybe String
+  maxWorkers : Maybe Nat
+
+export
+FromJSON TaskConfig where
+  fromJSON = withObject "TaskConfig" $ \o =>
+    [| MkTaskConfig (fieldMaybe o "batchName")
+                    (fieldMaybe o "maxWorkers") |]
+
+public export
+record JobParams where
+  constructor MkJobParams
   path       : String
   args       : List String
   timeout    : Int
@@ -23,16 +33,26 @@ parseEnvVars : SortedMap String String -> List (String, String)
 parseEnvVars = SortedMap.toList
 
 export
-FromJSON ProcessTask where
-  fromJSON = withObject "ProcessTask" $ \o =>
-    [| MKProcessTask (field      o "name")
-                     (fieldMaybe o "batchName")
-                     (field      o "path")
-                     (field      o "args")
-                     (field      o "timeout")
-                     (field      o "logFile")
-                     (fieldMaybe o "blockingIO")
-                     (map parseEnvVars $ fieldWithDeflt o (the (SortedMap String String) SortedMap.empty) "envVars") |]
+FromJSON JobParams where
+  fromJSON = withObject "JobParams" $ \o =>
+    [| MkJobParams (field      o "path")
+                   (field      o "args")
+                   (field      o "timeout")
+                   (field      o "logFile")
+                   (fieldMaybe o "blockingIO")
+                   (map parseEnvVars $ fieldWithDeflt o (the (SortedMap String String) SortedMap.empty) "envVars") |]
+
+public export
+record ProcessTask where
+  constructor MKProcessTask
+  name       : String
+  batchName  : Maybe String
+  path       : String
+  args       : List String
+  timeout    : Int
+  logFile    : Maybe String
+  blockingIO : Maybe Bool
+  envVars    : List (String, String)
 
 public export
 data TaskState = Ready | InProgress | Done | Failed

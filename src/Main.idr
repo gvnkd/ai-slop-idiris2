@@ -2,31 +2,15 @@ module Main
 
 import System
 import System.File
-import Language.JSON
-import JSON
 import System.Concurrency
 import Data.List
 import Worker
 import Protocol
+import Monitor.Provider
 
 spawnPool : Int -> Channel Task -> Channel Result -> IO ()
 spawnPool count tasks results = 
   ignore $ fork $ traverse_ (\i => fork (worker i tasks results)) [1..count]
-
--- Загрузка задач теперь явно сигнализирует о неудаче
-loadTasks : String -> IO (Maybe (List ProcessTask))
-loadTasks filename = do
-  res <- readFile filename
-  case res of
-    Left err => do
-      putStrLn "Error: Config file '\{filename}' not found (\{show err})"
-      pure Nothing
-    Right content =>
-      case decode {a = List ProcessTask} content of
-        Right tasks => pure (Just tasks)
-        Left err    => do
-          putStrLn "Error: Failed to parse JSON in '\{filename}': \{err}"
-          pure Nothing
 
 main : IO ()
 main = do
@@ -34,7 +18,7 @@ main = do
   putStrLn "=== Linux Process Worker Pool (Auto-JSON) ==="
 
   -- 1. Пытаемся загрузить конфиг
-  Just tasksFromConfig <- loadTasks "tasks.json"
+  Just (_, tasksFromConfig) <- Monitor.Provider.loadTasks "tasks.json"
     | Nothing => putStrLn "Shutting down due to config error."
 
   

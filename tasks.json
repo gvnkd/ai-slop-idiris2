@@ -1,74 +1,64 @@
-[
-  {
-    "name": "Quick Sleep",
+{
+  "config": {
     "batchName": "Test Suite",
-    "path": "sleep",
-    "args": ["0.5"],
-    "timeout": 1,
-    "logFile": "logs/quick_sleep.log",
-    "blockingIO": false
+    "maxWorkers": 3
   },
-  {
-    "name": "Colored Output",
-    "batchName": "Test Suite",
-    "path": "ls",
-    "args": ["--color=always", "-la", "/"],
-    "timeout": 2,
-    "logFile": "logs/colored.log",
-    "blockingIO": false
-  },
-  {
-    "name": "Timed Out Task",
-    "batchName": "Test Suite",
-    "path": "sleep",
-    "args": ["5"],
-    "timeout": 1,
-    "logFile": "logs/timeout.log",
-    "blockingIO": false
-  },
-  {
-    "name": "Failing Command",
-    "batchName": "Test Suite",
-    "path": "false",
-    "args": [],
-    "timeout": 2,
-    "logFile": "logs/failing.log",
-    "blockingIO": false
-  },
-  {
-    "name": "Missing Binary Test",
-    "batchName": "Test Suite",
-    "path": "/usr/bin/not-exist",
-    "args": [],
-    "timeout": 5,
-    "logFile": "logs/missing.log",
-    "blockingIO": false
-  },
-  {
-    "name": "Echo Test",
-    "batchName": "Test Suite",
-    "path": "echo",
-    "args": ["Hello from echo task"],
-    "timeout": 2,
-    "logFile": "logs/echo.log",
-    "blockingIO": false
-  },
-  {
-    "name": "Ansible",
-    "batchName": "Test Suite",
-    "path": "ansible-playbook",
-    "args": ["-i", "localhost,", "test/playbook.yml"],
-    "timeout": 30,
-    "logFile": "logs/ansible.log",
-    "blockingIO": false
-  },
-  {
-    "name": "Watch",
-    "batchName": "Test Suite",
-    "path": "sh",
-    "args": ["-c", "cat /dev/urandom | xxd | head -n 20"],
-    "timeout": 5,
-    "logFile": "logs/watch.log",
-    "blockingIO": false
+  "Test Suite": {
+    "Quick Sleep": {
+      "path": "sleep",
+      "args": ["0.5"],
+      "timeout": 1,
+      "logFile": "logs/quick_sleep.log",
+      "blockingIO": false
+    },
+    "Colored Output": {
+      "path": "ls",
+      "args": ["--color=always", "-la", "/"],
+      "timeout": 2,
+      "logFile": "logs/colored.log",
+      "blockingIO": false
+    },
+    "Timed Out Task": {
+      "path": "sleep",
+      "args": ["5"],
+      "timeout": 1,
+      "logFile": "logs/timeout.log",
+      "blockingIO": false
+    },
+    "Failing Command": {
+      "path": "false",
+      "args": [],
+      "timeout": 2,
+      "logFile": "logs/failing.log",
+      "blockingIO": false
+    },
+    "Missing Binary Test": {
+      "path": "/usr/bin/not-exist",
+      "args": [],
+      "timeout": 5,
+      "logFile": "logs/missing.log",
+      "blockingIO": false
+    },
+    "Echo Test": {
+      "path": "echo",
+      "args": ["Hello from echo task"],
+      "timeout": 2,
+      "logFile": "logs/echo.log",
+      "blockingIO": false
+    },
+    "Ansible": {
+      "path": "ansible-playbook",
+      "args": ["-i", "localhost,", "test/playbook.yml"],
+      "timeout": 30,
+      "logFile": "logs/ansible.log",
+      "blockingIO": false
+    },
+    "Watch": {
+      "path": "sh",
+      "args": ["-c", "cat /dev/urandom | xxd | head -n 20"],
+      "timeout": 5,
+      "logFile": "logs/watch.log",
+      "blockingIO": false
+    }
   }
-]
+}
